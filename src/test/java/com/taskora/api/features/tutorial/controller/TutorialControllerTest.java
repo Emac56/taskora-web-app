@@ -272,4 +272,4 @@ void shouldReturnBadRequestWhenUpdateDescriptionIsBlank()
     )
     .andExpect(status().isBadRequest());
 }
-
+}
