@@ -104,7 +104,7 @@ class TutorialStepServiceImplTest {
                 .thenReturn(Optional.empty());
 
         assertThrows(
-                IllegalArgumentException.class,
+                ResourceNotFoundException.class,
                 () -> tutorialStepService.create(1L, createRequest)
         );
 
@@ -134,7 +134,7 @@ class TutorialStepServiceImplTest {
                 .thenReturn(Optional.empty());
 
         assertThrows(
-                IllegalArgumentException.class,
+                ResourceNotFoundException.class,
                 () -> tutorialStepService.getById(10L)
         );
 
@@ -188,7 +188,7 @@ class TutorialStepServiceImplTest {
                 .thenReturn(Optional.empty());
 
         assertThrows(
-                IllegalArgumentException.class,
+                ResourceNotFoundException.class,
                 () -> tutorialStepService.update(10L, updateRequest)
         );
 
@@ -212,7 +212,7 @@ class TutorialStepServiceImplTest {
                 .thenReturn(false);
 
         assertThrows(
-                IllegalArgumentException.class,
+                ResourceNotFoundException.class,
                 () -> tutorialStepService.delete(10L)
         );
 
