@@ -65,7 +65,7 @@ class SecurityConfigTest {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "ADMIN")
     void createTutorialShouldSucceedWhenAuthenticated() throws Exception {
 
         CreateTutorialRequest request = new CreateTutorialRequest();
