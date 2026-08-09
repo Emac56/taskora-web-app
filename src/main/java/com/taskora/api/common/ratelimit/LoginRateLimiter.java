@@ -26,6 +26,10 @@ public class LoginRateLimiter {
 
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
+    /**
+     * Primary constructor for Spring dependency injection.
+     * Values are injected from application configuration.
+     */
     public LoginRateLimiter(
             @Value("${app.rate-limit.login.max-attempts}") int maxAttempts,
             @Value("${app.rate-limit.login.window-seconds}") long windowSeconds) {
