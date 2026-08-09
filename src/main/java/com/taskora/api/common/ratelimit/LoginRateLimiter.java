@@ -2,6 +2,7 @@ package com.taskora.api.common.ratelimit;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.LongSupplier;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -21,21 +22,33 @@ public class LoginRateLimiter {
 
     private final int maxAttempts;
     private final long windowMillis;
+    private final LongSupplier clock;
 
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
     public LoginRateLimiter(
             @Value("${app.rate-limit.login.max-attempts}") int maxAttempts,
             @Value("${app.rate-limit.login.window-seconds}") long windowSeconds) {
+        this(maxAttempts, windowSeconds, System::currentTimeMillis);
+    }
+
+    /**
+     * Visible for testing: allows tests to control the passage of time
+     * without relying on Thread.sleep, keeping window-expiry tests
+     * fast and deterministic.
+     */
+    LoginRateLimiter(int maxAttempts, long windowSeconds, LongSupplier clock) {
         this.maxAttempts = maxAttempts;
         this.windowMillis = windowSeconds * 1000L;
+        this.clock = clock;
     }
 
     public void checkAllowed(String clientId) {
-        Bucket bucket = buckets.computeIfAbsent(clientId, key -> new Bucket());
+        Bucket bucket = buckets.computeIfAbsent(
+                clientId, key -> new Bucket(clock.getAsLong()));
 
         synchronized (bucket) {
-            long now = System.currentTimeMillis();
+            long now = clock.getAsLong();
 
             if (now - bucket.windowStart >= windowMillis) {
                 bucket.windowStart = now;
@@ -56,7 +69,11 @@ public class LoginRateLimiter {
     }
 
     private static final class Bucket {
-        private long windowStart = System.currentTimeMillis();
+        private long windowStart;
         private int count = 0;
+
+        private Bucket(long windowStart) {
+            this.windowStart = windowStart;
+        }
     }
 }

@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 import org.junit.jupiter.api.Test;
 
 import com.taskora.api.common.exception.RateLimitExceededException;
@@ -36,14 +38,15 @@ class LoginRateLimiterTest {
     }
 
     @Test
-    void resetsAfterWindowExpires() throws InterruptedException {
-        LoginRateLimiter limiter = new LoginRateLimiter(1, 1);
+    void resetsAfterWindowExpires() {
+        AtomicLong fakeTime = new AtomicLong(0L);
+        LoginRateLimiter limiter = new LoginRateLimiter(1, 1, fakeTime::get);
 
         limiter.checkAllowed("127.0.0.1");
         assertThrows(RateLimitExceededException.class,
                 () -> limiter.checkAllowed("127.0.0.1"));
 
-        Thread.sleep(1100);
+        fakeTime.addAndGet(1100);
 
         assertDoesNotThrow(() -> limiter.checkAllowed("127.0.0.1"));
     }
