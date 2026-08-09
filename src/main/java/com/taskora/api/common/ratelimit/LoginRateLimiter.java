@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -30,6 +31,7 @@ public class LoginRateLimiter {
      * Primary constructor for Spring dependency injection.
      * Values are injected from application configuration.
      */
+    @Autowired
     public LoginRateLimiter(
             @Value("${app.rate-limit.login.max-attempts}") int maxAttempts,
             @Value("${app.rate-limit.login.window-seconds}") long windowSeconds) {
