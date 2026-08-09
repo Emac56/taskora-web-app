@@ -92,7 +92,7 @@ class LoginSessionTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(validLoginRequest()))
         )
-        .andExpect(status().isInternalServerError());
+.andExpect(status().isUnauthorized());
     }
 
     @Test

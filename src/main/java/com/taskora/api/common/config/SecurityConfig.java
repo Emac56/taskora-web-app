@@ -12,6 +12,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
+import jakarta.servlet.http.HttpServletResponse;
 
 @Configuration
 public class SecurityConfig {
@@ -45,8 +46,13 @@ public class SecurityConfig {
                             "/api/v1/tutorials/**",
                             "/api/v1/tutorial-steps/**")
                         .permitAll()
-                    .anyRequest().authenticated())
+                        
+.anyRequest().authenticated())
+            .exceptionHandling(exception -> exception
+                    .authenticationEntryPoint((request, response, authException) ->
+                            response.sendError(HttpServletResponse.SC_UNAUTHORIZED)))
             .formLogin(AbstractHttpConfigurer::disable)
+            
             .logout(logout -> logout
                     .logoutUrl("/api/v1/users/logout")
                     .invalidateHttpSession(true)

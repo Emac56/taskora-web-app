@@ -23,4 +23,17 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.NOT_FOUND)
                 .body(response);
     }
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidCredentials(
+            IllegalArgumentException exception) {
+
+        ApiErrorResponse response = new ApiErrorResponse();
+
+        response.setSuccess(false);
+        response.setMessage(exception.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(response);
+    }
 }
