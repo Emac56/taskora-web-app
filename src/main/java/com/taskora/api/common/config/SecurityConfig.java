@@ -17,6 +17,8 @@ import jakarta.servlet.http.HttpServletResponse;
 @Configuration
 public class SecurityConfig {
 
+    private static final String ROLE_ADMIN = "ADMIN";
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -46,13 +48,24 @@ public class SecurityConfig {
                             "/api/v1/tutorials/**",
                             "/api/v1/tutorial-steps/**")
                         .permitAll()
-                        
-.anyRequest().authenticated())
+                    .requestMatchers(HttpMethod.POST,
+                            "/api/v1/tutorials",
+                            "/api/v1/tutorials/*/steps")
+                        .hasRole(ROLE_ADMIN)
+                    .requestMatchers(HttpMethod.PUT,
+                            "/api/v1/tutorials/*",
+                            "/api/v1/tutorial-steps/*")
+                        .hasRole(ROLE_ADMIN)
+                    .requestMatchers(HttpMethod.DELETE,
+                            "/api/v1/tutorials/*",
+                            "/api/v1/tutorial-steps/*")
+                        .hasRole(ROLE_ADMIN)
+                    .anyRequest().authenticated())
             .exceptionHandling(exception -> exception
                     .authenticationEntryPoint((request, response, authException) ->
                             response.sendError(HttpServletResponse.SC_UNAUTHORIZED)))
             .formLogin(AbstractHttpConfigurer::disable)
-            
+
             .logout(logout -> logout
                     .logoutUrl("/api/v1/users/logout")
                     .invalidateHttpSession(true)
