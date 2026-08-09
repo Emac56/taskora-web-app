@@ -37,7 +37,7 @@ public class TutorialStepServiceImpl implements TutorialStepService {
 
         Tutorial tutorial = tutorialRepository.findById(tutorialId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException("Tutorial not found."));
+                        new ResourceNotFoundException("Tutorial not found."));
 
         TutorialStep tutorialStep =
                 tutorialStepMapper.toEntity(request);
@@ -56,7 +56,7 @@ public class TutorialStepServiceImpl implements TutorialStepService {
         TutorialStep tutorialStep =
                 tutorialStepRepository.findById(id)
                         .orElseThrow(() ->
-                                new IllegalArgumentException(
+                                new ResourceNotFoundException(
                                         "Tutorial step not found."));
 
         return tutorialStepMapper.toResponse(tutorialStep);
@@ -78,7 +78,7 @@ public List<TutorialStepResponse> getAllByTutorialId(Long tutorialId) {
         TutorialStep tutorialStep =
                 tutorialStepRepository.findById(id)
                         .orElseThrow(() ->
-                                new IllegalArgumentException(
+                                new ResourceNotFoundException(
                                         "Tutorial step not found."));
 
         tutorialStepMapper.updateEntity(request, tutorialStep);
@@ -93,7 +93,7 @@ public List<TutorialStepResponse> getAllByTutorialId(Long tutorialId) {
     public void delete(Long id) {
 
         if (!tutorialStepRepository.existsById(id)) {
-            throw new IllegalArgumentException(
+            throw new ResourceNotFoundException(
                     "Tutorial step not found.");
         }
 
