@@ -10,6 +10,7 @@ import com.taskora.api.features.tutorial.dto.response.TutorialResponse;
 import com.taskora.api.features.tutorial.entity.Tutorial;
 import com.taskora.api.features.tutorial.mapper.TutorialMapper;
 import com.taskora.api.features.tutorial.repository.TutorialRepository;
+import com.taskora.api.common.exception.ResourceNotFoundException;
 
 @Service
 public class TutorialServiceImpl implements TutorialService {
@@ -37,7 +38,7 @@ public class TutorialServiceImpl implements TutorialService {
     public TutorialResponse getById(Long id) {
         Tutorial tutorial = tutorialRepository.findById(id)
                 .orElseThrow(() ->
-                        new IllegalArgumentException("Tutorial not found."));
+                        new ResourceNotFoundException("Tutorial not found."));
 
         return tutorialMapper.toResponse(tutorial);
     }
@@ -57,7 +58,7 @@ public class TutorialServiceImpl implements TutorialService {
 
         Tutorial tutorial = tutorialRepository.findById(id)
                 .orElseThrow(() ->
-                        new IllegalArgumentException("Tutorial not found."));
+                        new ResourceNotFoundException("Tutorial not found."));
 
         tutorialMapper.updateEntity(request, tutorial);
 
@@ -69,7 +70,7 @@ public class TutorialServiceImpl implements TutorialService {
     @Override
     public void delete(Long id) {
         if (!tutorialRepository.existsById(id)) {
-            throw new IllegalArgumentException("Tutorial not found.");
+            throw new ResourceNotFoundException("Tutorial not found.");
         }
 
         tutorialRepository.deleteById(id);

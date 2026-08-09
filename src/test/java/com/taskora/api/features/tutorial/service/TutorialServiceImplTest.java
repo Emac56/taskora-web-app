@@ -22,6 +22,7 @@ import com.taskora.api.features.tutorial.entity.Tutorial;
 import com.taskora.api.features.tutorial.enums.TutorialStatus;
 import com.taskora.api.features.tutorial.mapper.TutorialMapper;
 import com.taskora.api.features.tutorial.repository.TutorialRepository;
+import com.taskora.api.common.exception.ResourceNotFoundException;
 
 @ExtendWith(MockitoExtension.class)
 class TutorialServiceImplTest {
@@ -107,7 +108,7 @@ class TutorialServiceImplTest {
                 .thenReturn(Optional.empty());
 
         assertThrows(
-                IllegalArgumentException.class,
+                ResourceNotFoundException.class,
                 () -> tutorialService.getById(1L)
         );
 
@@ -172,7 +173,7 @@ class TutorialServiceImplTest {
                 .thenReturn(Optional.empty());
 
         assertThrows(
-                IllegalArgumentException.class,
+               ResourceNotFoundException.class,
                 () -> tutorialService.update(1L, updateRequest)
         );
 
@@ -196,7 +197,7 @@ class TutorialServiceImplTest {
                 .thenReturn(false);
 
         assertThrows(
-                IllegalArgumentException.class,
+                ResourceNotFoundException.class,
                 () -> tutorialService.delete(1L)
         );
 
