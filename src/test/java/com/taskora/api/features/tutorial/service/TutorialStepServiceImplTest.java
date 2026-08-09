@@ -23,6 +23,7 @@ import com.taskora.api.features.tutorial.entity.TutorialStep;
 import com.taskora.api.features.tutorial.mapper.TutorialStepMapper;
 import com.taskora.api.features.tutorial.repository.TutorialRepository;
 import com.taskora.api.features.tutorial.repository.TutorialStepRepository;
+import com.taskora.api.common.exception.ResourceNotFoundException;
 
 @ExtendWith(MockitoExtension.class)
 class TutorialStepServiceImplTest {

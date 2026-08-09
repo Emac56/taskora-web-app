@@ -10,6 +10,7 @@ import com.taskora.api.features.tutorial.dto.response.TutorialResponse;
 import com.taskora.api.features.tutorial.entity.Tutorial;
 import com.taskora.api.features.tutorial.mapper.TutorialMapper;
 import com.taskora.api.features.tutorial.repository.TutorialRepository;
+import com.taskora.api.common.exception.ResourceNotFoundException;
 
 @Service
 public class TutorialServiceImpl implements TutorialService {

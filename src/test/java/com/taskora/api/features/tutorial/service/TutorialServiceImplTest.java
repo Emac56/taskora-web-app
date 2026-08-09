@@ -22,6 +22,7 @@ import com.taskora.api.features.tutorial.entity.Tutorial;
 import com.taskora.api.features.tutorial.enums.TutorialStatus;
 import com.taskora.api.features.tutorial.mapper.TutorialMapper;
 import com.taskora.api.features.tutorial.repository.TutorialRepository;
+import com.taskora.api.common.exception.ResourceNotFoundException;
 
 @ExtendWith(MockitoExtension.class)
 class TutorialServiceImplTest {
