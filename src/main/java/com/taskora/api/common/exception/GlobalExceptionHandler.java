@@ -1,5 +1,6 @@
 package com.taskora.api.common.exception;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -34,6 +35,22 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED)
+                .body(response);
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ApiErrorResponse> handleRateLimitExceeded(
+            RateLimitExceededException exception) {
+
+        ApiErrorResponse response = new ApiErrorResponse();
+
+        response.setSuccess(false);
+        response.setMessage(exception.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER,
+                        String.valueOf(exception.getRetryAfterSeconds()))
                 .body(response);
     }
 }
