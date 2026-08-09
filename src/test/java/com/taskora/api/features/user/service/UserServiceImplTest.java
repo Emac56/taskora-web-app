@@ -13,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import com.taskora.api.common.enums.Role;
 import com.taskora.api.features.user.dto.request.LoginRequest;
@@ -29,6 +30,9 @@ class UserServiceImplTest {
 
     @Mock
     private UserMapper userMapper;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
 
     @InjectMocks
     private UserServiceImpl userService;
@@ -62,6 +66,9 @@ class UserServiceImplTest {
         when(userRepository.findByEmail("admin@taskora.com"))
                 .thenReturn(Optional.of(user));
 
+        when(passwordEncoder.matches("password", "encoded-password"))
+                .thenReturn(true);
+
         when(userMapper.toLoginResponse(user))
                 .thenReturn(loginResponse);
 
@@ -70,6 +77,7 @@ class UserServiceImplTest {
         assertEquals(loginResponse, result);
 
         verify(userRepository).findByEmail("admin@taskora.com");
+        verify(passwordEncoder).matches("password", "encoded-password");
         verify(userMapper).toLoginResponse(user);
     }
 
@@ -84,5 +92,22 @@ class UserServiceImplTest {
         );
 
         verify(userRepository).findByEmail("admin@taskora.com");
+    }
+
+    @Test
+    void shouldThrowExceptionWhenPasswordIsIncorrect() {
+        when(userRepository.findByEmail("admin@taskora.com"))
+                .thenReturn(Optional.of(user));
+
+        when(passwordEncoder.matches("password", "encoded-password"))
+                .thenReturn(false);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> userService.login(loginRequest)
+        );
+
+        verify(userRepository).findByEmail("admin@taskora.com");
+        verify(passwordEncoder).matches("password", "encoded-password");
     }
 }
