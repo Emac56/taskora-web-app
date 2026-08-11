@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.taskora.api.common.ratelimit.LoginRateLimiter;
+import com.taskora.api.common.util.ClientIpResolver;
 import com.taskora.api.features.user.dto.request.LoginRequest;
 import com.taskora.api.features.user.dto.response.LoginResponse;
 import com.taskora.api.features.user.service.UserService;
@@ -28,12 +30,18 @@ public class UserController {
 
     private final UserService userService;
     private final SecurityContextRepository securityContextRepository;
+    private final LoginRateLimiter loginRateLimiter;
+    private final ClientIpResolver clientIpResolver;
 
     public UserController(
             UserService userService,
-            SecurityContextRepository securityContextRepository) {
+            SecurityContextRepository securityContextRepository,
+            LoginRateLimiter loginRateLimiter,
+            ClientIpResolver clientIpResolver) {
         this.userService = userService;
         this.securityContextRepository = securityContextRepository;
+        this.loginRateLimiter = loginRateLimiter;
+        this.clientIpResolver = clientIpResolver;
     }
 
     @PostMapping("/login")
@@ -41,6 +49,9 @@ public class UserController {
             @Valid @RequestBody LoginRequest request,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
+
+        String clientId = clientIpResolver.resolve(httpRequest);
+        loginRateLimiter.checkAllowed(clientId);
 
         LoginResponse response = userService.login(request);
 
