@@ -15,15 +15,17 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.taskora.api.common.exception.ResourceNotFoundException;
+import com.taskora.api.common.security.CurrentUserProvider;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialStepRequest;
 import com.taskora.api.features.tutorial.dto.request.UpdateTutorialStepRequest;
 import com.taskora.api.features.tutorial.dto.response.TutorialStepResponse;
 import com.taskora.api.features.tutorial.entity.Tutorial;
 import com.taskora.api.features.tutorial.entity.TutorialStep;
+import com.taskora.api.features.tutorial.enums.TutorialStatus;
 import com.taskora.api.features.tutorial.mapper.TutorialStepMapper;
 import com.taskora.api.features.tutorial.repository.TutorialRepository;
 import com.taskora.api.features.tutorial.repository.TutorialStepRepository;
-import com.taskora.api.common.exception.ResourceNotFoundException;
 
 @ExtendWith(MockitoExtension.class)
 class TutorialStepServiceImplTest {
@@ -36,6 +38,9 @@ class TutorialStepServiceImplTest {
 
     @Mock
     private TutorialStepMapper tutorialStepMapper;
+
+    @Mock
+    private CurrentUserProvider currentUserProvider;
 
     @InjectMocks
     private TutorialStepServiceImpl tutorialStepService;
@@ -51,6 +56,7 @@ class TutorialStepServiceImplTest {
         tutorial = new Tutorial();
         tutorial.setId(1L);
         tutorial.setTitle("Java Basics");
+        tutorial.setStatus(TutorialStatus.PUBLISHED);
 
         tutorialStep = new TutorialStep();
         tutorialStep.setId(10L);
@@ -143,7 +149,30 @@ class TutorialStepServiceImplTest {
     }
 
     @Test
+    void shouldThrowNotFoundWhenNonAdminRequestsStepOfDraftTutorial() {
+        Tutorial draftTutorial = new Tutorial();
+        draftTutorial.setId(1L);
+        draftTutorial.setStatus(TutorialStatus.DRAFT);
+
+        TutorialStep draftStep = new TutorialStep();
+        draftStep.setId(10L);
+        draftStep.setTutorial(draftTutorial);
+
+        when(tutorialStepRepository.findById(10L))
+                .thenReturn(Optional.of(draftStep));
+        when(currentUserProvider.isAdmin()).thenReturn(false);
+
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> tutorialStepService.getById(10L)
+        );
+    }
+
+    @Test
     void shouldGetAllTutorialStepsByTutorialId() {
+        when(tutorialRepository.findById(1L))
+                .thenReturn(Optional.of(tutorial));
+
         when(tutorialStepRepository.findAllByTutorialId(1L))
                 .thenReturn(List.of(tutorialStep));
 
@@ -156,8 +185,25 @@ class TutorialStepServiceImplTest {
         assertEquals(1, result.size());
         assertEquals(response, result.get(0));
 
+        verify(tutorialRepository).findById(1L);
         verify(tutorialStepRepository).findAllByTutorialId(1L);
         verify(tutorialStepMapper).toResponse(tutorialStep);
+    }
+
+    @Test
+    void shouldThrowNotFoundWhenNonAdminRequestsStepsOfDraftTutorial() {
+        Tutorial draftTutorial = new Tutorial();
+        draftTutorial.setId(1L);
+        draftTutorial.setStatus(TutorialStatus.DRAFT);
+
+        when(tutorialRepository.findById(1L))
+                .thenReturn(Optional.of(draftTutorial));
+        when(currentUserProvider.isAdmin()).thenReturn(false);
+
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> tutorialStepService.getAllByTutorialId(1L)
+        );
     }
 
     @Test
