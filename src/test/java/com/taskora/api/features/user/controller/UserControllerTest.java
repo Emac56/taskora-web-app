@@ -21,6 +21,8 @@ import com.taskora.api.common.enums.Role;
 import com.taskora.api.features.user.dto.request.LoginRequest;
 import com.taskora.api.features.user.dto.response.LoginResponse;
 import com.taskora.api.features.user.service.UserService;
+import com.taskora.api.common.ratelimit.LoginRateLimiter;
+import com.taskora.api.common.util.ClientIpResolver;
 
 @WebMvcTest(UserController.class)
 @AutoConfigureMockMvc(addFilters = false)
@@ -37,7 +39,13 @@ class UserControllerTest {
 
     @MockBean
     private SecurityContextRepository securityContextRepository;
-
+    
+    @MockBean
+    private LoginRateLimiter loginRateLimiter;
+    
+    @MockBean
+    private ClientIpResolver clientIpResolver;
+    
     @Test
     void shouldLoginSuccessfully() throws Exception {
 

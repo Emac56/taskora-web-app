@@ -28,6 +28,8 @@ import com.taskora.api.features.tutorial.service.TutorialService;
 import com.taskora.api.features.user.dto.request.LoginRequest;
 import com.taskora.api.features.user.dto.response.LoginResponse;
 import com.taskora.api.features.user.service.UserService;
+import com.taskora.api.common.ratelimit.LoginRateLimiter;
+import com.taskora.api.common.util.ClientIpResolver;
 
 @WebMvcTest({UserController.class, TutorialController.class})
 @Import(SecurityConfig.class)
@@ -46,6 +48,12 @@ class LogoutTest {
     @MockBean
     private TutorialService tutorialService;
 
+    @MockBean
+    private LoginRateLimiter loginRateLimiter;
+    
+    @MockBean
+    private ClientIpResolver clientIpResolver;
+    
     private LoginRequest validLoginRequest() {
         LoginRequest request = new LoginRequest();
         request.setEmail("admin@taskora.com");
