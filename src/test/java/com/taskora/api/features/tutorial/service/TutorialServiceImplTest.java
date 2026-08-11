@@ -1,5 +1,6 @@
 package com.taskora.api.features.tutorial.service;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
@@ -15,6 +16,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.taskora.api.common.exception.ResourceNotFoundException;
+import com.taskora.api.common.security.CurrentUserProvider;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialRequest;
 import com.taskora.api.features.tutorial.dto.request.UpdateTutorialRequest;
 import com.taskora.api.features.tutorial.dto.response.TutorialResponse;
@@ -22,7 +25,6 @@ import com.taskora.api.features.tutorial.entity.Tutorial;
 import com.taskora.api.features.tutorial.enums.TutorialStatus;
 import com.taskora.api.features.tutorial.mapper.TutorialMapper;
 import com.taskora.api.features.tutorial.repository.TutorialRepository;
-import com.taskora.api.common.exception.ResourceNotFoundException;
 
 @ExtendWith(MockitoExtension.class)
 class TutorialServiceImplTest {
@@ -32,6 +34,9 @@ class TutorialServiceImplTest {
 
     @Mock
     private TutorialMapper tutorialMapper;
+
+    @Mock
+    private CurrentUserProvider currentUserProvider;
 
     @InjectMocks
     private TutorialServiceImpl tutorialService;
@@ -47,13 +52,13 @@ class TutorialServiceImplTest {
         tutorial.setId(1L);
         tutorial.setTitle("Java Basics");
         tutorial.setDescription("Learn Java fundamentals.");
-        tutorial.setStatus(TutorialStatus.DRAFT);
+        tutorial.setStatus(TutorialStatus.PUBLISHED);
 
         tutorialResponse = new TutorialResponse();
         tutorialResponse.setId(1L);
         tutorialResponse.setTitle("Java Basics");
         tutorialResponse.setDescription("Learn Java fundamentals.");
-        tutorialResponse.setStatus(TutorialStatus.DRAFT);
+        tutorialResponse.setStatus(TutorialStatus.PUBLISHED);
 
         createRequest = new CreateTutorialRequest();
         createRequest.setTitle("Java Basics");
@@ -116,10 +121,42 @@ class TutorialServiceImplTest {
     }
 
     @Test
+    void shouldThrowNotFoundWhenNonAdminRequestsDraftTutorial() {
+        Tutorial draftTutorial = new Tutorial();
+        draftTutorial.setId(1L);
+        draftTutorial.setStatus(TutorialStatus.DRAFT);
+
+        when(tutorialRepository.findById(1L))
+                .thenReturn(Optional.of(draftTutorial));
+        when(currentUserProvider.isAdmin()).thenReturn(false);
+
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> tutorialService.getById(1L)
+        );
+    }
+
+    @Test
+    void shouldReturnDraftTutorialWhenCallerIsAdmin() {
+        Tutorial draftTutorial = new Tutorial();
+        draftTutorial.setId(1L);
+        draftTutorial.setStatus(TutorialStatus.DRAFT);
+
+        when(tutorialRepository.findById(1L))
+                .thenReturn(Optional.of(draftTutorial));
+        when(currentUserProvider.isAdmin()).thenReturn(true);
+        when(tutorialMapper.toResponse(draftTutorial))
+                .thenReturn(new TutorialResponse());
+
+        assertDoesNotThrow(() -> tutorialService.getById(1L));
+    }
+
+    @Test
     void shouldGetAllTutorials() {
         Tutorial secondTutorial = new Tutorial();
         secondTutorial.setId(2L);
         secondTutorial.setTitle("Spring Boot");
+        secondTutorial.setStatus(TutorialStatus.PUBLISHED);
 
         TutorialResponse secondResponse = new TutorialResponse();
         secondResponse.setId(2L);
@@ -143,6 +180,26 @@ class TutorialServiceImplTest {
         verify(tutorialRepository).findAll();
         verify(tutorialMapper).toResponse(tutorial);
         verify(tutorialMapper).toResponse(secondTutorial);
+    }
+
+    @Test
+    void shouldExcludeDraftTutorialsFromListWhenCallerIsNotAdmin() {
+        Tutorial draftTutorial = new Tutorial();
+        draftTutorial.setId(3L);
+        draftTutorial.setStatus(TutorialStatus.DRAFT);
+
+        when(tutorialRepository.findAll())
+                .thenReturn(List.of(tutorial, draftTutorial));
+
+        when(tutorialMapper.toResponse(tutorial))
+                .thenReturn(tutorialResponse);
+
+        List<TutorialResponse> result = tutorialService.getAll();
+
+        assertEquals(1, result.size());
+        assertEquals(tutorialResponse, result.get(0));
+
+        verify(tutorialMapper).toResponse(tutorial);
     }
 
     @Test
@@ -203,4 +260,35 @@ class TutorialServiceImplTest {
 
         verify(tutorialRepository).existsById(1L);
     }
+    
+  @Test
+void shouldIncludeDraftTutorialsInListWhenCallerIsAdmin() {
+    Tutorial draftTutorial = new Tutorial();
+    draftTutorial.setId(3L);
+    draftTutorial.setStatus(TutorialStatus.DRAFT);
+
+    TutorialResponse draftResponse = new TutorialResponse();
+    draftResponse.setId(3L);
+    draftResponse.setStatus(TutorialStatus.DRAFT);
+
+    when(currentUserProvider.isAdmin()).thenReturn(true);
+
+    when(tutorialRepository.findAll())
+            .thenReturn(List.of(tutorial, draftTutorial));
+
+    when(tutorialMapper.toResponse(tutorial))
+            .thenReturn(tutorialResponse);
+
+    when(tutorialMapper.toResponse(draftTutorial))
+            .thenReturn(draftResponse);
+
+    List<TutorialResponse> result = tutorialService.getAll();
+
+    assertEquals(2, result.size());
+    assertEquals(tutorialResponse, result.get(0));
+    assertEquals(draftResponse, result.get(1));
+
+    verify(currentUserProvider).isAdmin();
+}
+
 }
