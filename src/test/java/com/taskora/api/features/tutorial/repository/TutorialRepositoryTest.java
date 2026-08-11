@@ -78,4 +78,27 @@ class TutorialRepositoryTest {
                 tutorialRepository.existsById(savedTutorial.getId())
         );
     }
+    
+    @Test
+    void shouldDeleteTutorialAndItsSteps() {
+    Tutorial tutorial = new Tutorial();
+    tutorial.setTitle("Tutorial With Steps");
+    tutorial.setDescription("Has steps that must cascade delete.");
+    tutorial.setStatus(TutorialStatus.DRAFT);
+
+    TutorialStep step = new TutorialStep();
+    step.setTutorial(tutorial);
+    step.setStepNumber(1);
+    step.setInstruction("First step.");
+
+    tutorial.getTutorialStep().add(step);
+
+    Tutorial savedTutorial = tutorialRepository.save(tutorial);
+    Long tutorialId = savedTutorial.getId();
+
+    tutorialRepository.deleteById(tutorialId);
+
+    assertFalse(tutorialRepository.existsById(tutorialId));
+    assertTrue(tutorialStepRepository.findAllByTutorialId(tutorialId).isEmpty());
+}
 }
