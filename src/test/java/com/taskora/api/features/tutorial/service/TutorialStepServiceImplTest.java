@@ -265,4 +265,17 @@ class TutorialStepServiceImplTest {
 
         verify(tutorialStepRepository).existsById(10L);
     }
+    
+    @Test
+    void shouldThrowExceptionWhenTutorialNotFoundForGetAllByTutorialId() {
+    when(tutorialRepository.findById(1L))
+            .thenReturn(Optional.empty());
+
+    assertThrows(
+            ResourceNotFoundException.class,
+            () -> tutorialStepService.getAllByTutorialId(1L)
+    );
+
+    verify(tutorialRepository).findById(1L);
+}
 }

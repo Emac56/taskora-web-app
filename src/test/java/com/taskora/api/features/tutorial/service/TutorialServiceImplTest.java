@@ -260,4 +260,35 @@ class TutorialServiceImplTest {
 
         verify(tutorialRepository).existsById(1L);
     }
+    
+  @Test
+void shouldIncludeDraftTutorialsInListWhenCallerIsAdmin() {
+    Tutorial draftTutorial = new Tutorial();
+    draftTutorial.setId(3L);
+    draftTutorial.setStatus(TutorialStatus.DRAFT);
+
+    TutorialResponse draftResponse = new TutorialResponse();
+    draftResponse.setId(3L);
+    draftResponse.setStatus(TutorialStatus.DRAFT);
+
+    when(currentUserProvider.isAdmin()).thenReturn(true);
+
+    when(tutorialRepository.findAll())
+            .thenReturn(List.of(tutorial, draftTutorial));
+
+    when(tutorialMapper.toResponse(tutorial))
+            .thenReturn(tutorialResponse);
+
+    when(tutorialMapper.toResponse(draftTutorial))
+            .thenReturn(draftResponse);
+
+    List<TutorialResponse> result = tutorialService.getAll();
+
+    assertEquals(2, result.size());
+    assertEquals(tutorialResponse, result.get(0));
+    assertEquals(draftResponse, result.get(1));
+
+    verify(currentUserProvider).isAdmin();
+}
+
 }
