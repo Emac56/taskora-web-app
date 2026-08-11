@@ -278,4 +278,27 @@ class TutorialStepServiceImplTest {
 
     verify(tutorialRepository).findById(1L);
 }
+
+@Test
+void shouldReturnTutorialStepWhenCallerIsAdminAndTutorialIsDraft() {
+    Tutorial draftTutorial = new Tutorial();
+    draftTutorial.setId(1L);
+    draftTutorial.setStatus(TutorialStatus.DRAFT);
+
+    TutorialStep draftStep = new TutorialStep();
+    draftStep.setId(10L);
+    draftStep.setTutorial(draftTutorial);
+
+    when(tutorialStepRepository.findById(10L))
+            .thenReturn(Optional.of(draftStep));
+    when(currentUserProvider.isAdmin()).thenReturn(true);
+    when(tutorialStepMapper.toResponse(draftStep))
+            .thenReturn(response);
+
+    TutorialStepResponse result = tutorialStepService.getById(10L);
+
+    assertEquals(response, result);
+
+    verify(currentUserProvider).isAdmin();
+}
 }
