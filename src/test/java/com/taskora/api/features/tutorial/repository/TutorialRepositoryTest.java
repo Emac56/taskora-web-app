@@ -12,12 +12,16 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 
 import com.taskora.api.features.tutorial.entity.Tutorial;
 import com.taskora.api.features.tutorial.enums.TutorialStatus;
+import com.taskora.api.features.tutorial.entity.TutorialStep;
 
 @DataJpaTest
 class TutorialRepositoryTest {
 
     @Autowired
     private TutorialRepository tutorialRepository;
+
+    @Autowired
+    private TutorialStepRepository tutorialStepRepository;
 
     @Test
     void shouldSaveAndFindTutorial() {
