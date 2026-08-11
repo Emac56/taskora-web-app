@@ -15,7 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.taskora.api.common.config.SecurityConfig;
 import com.taskora.api.common.enums.Role;
@@ -175,5 +175,29 @@ class LoginSessionTest {
                         .content(objectMapper.writeValueAsString(tutorialRequest()))
         )
         .andExpect(status().isUnauthorized());
+    }
+    
+    @Test
+    void loginShouldRotateSessionIdToPreventFixation() throws Exception {
+
+        when(userService.login(any(LoginRequest.class)))
+                .thenReturn(validLoginResponse());
+
+        MockHttpSession preLoginSession = new MockHttpSession();
+        String sessionIdBeforeLogin = preLoginSession.getId();
+
+        MvcResult loginResult = mockMvc.perform(
+                post("/api/v1/users/login")
+                        .session(preLoginSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validLoginRequest()))
+        )
+        .andExpect(status().isOk())
+        .andReturn();
+
+        String sessionIdAfterLogin =
+                loginResult.getRequest().getSession(false).getId();
+
+        assertNotEquals(sessionIdBeforeLogin, sessionIdAfterLogin);
     }
 }

@@ -55,6 +55,10 @@ public class UserController {
 
         LoginResponse response = userService.login(request);
 
+        if (httpRequest.getSession(false) != null) {
+            httpRequest.changeSessionId();
+        }
+
         Authentication authentication = new UsernamePasswordAuthenticationToken(
                 response.getEmail(),
                 null,
