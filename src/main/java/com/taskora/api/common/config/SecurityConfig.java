@@ -20,6 +20,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import jakarta.servlet.http.HttpServletResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.taskora.api.common.dto.response.ApiErrorResponse;
 
 @Configuration
 public class SecurityConfig {
@@ -94,8 +96,18 @@ public class SecurityConfig {
                         .hasRole(ROLE_ADMIN)
                     .anyRequest().authenticated())
             .exceptionHandling(exception -> exception
-                    .authenticationEntryPoint((request, response, authException) ->
-                            response.sendError(HttpServletResponse.SC_UNAUTHORIZED)))
+            
+            
+.authenticationEntryPoint((request, response, authException) -> {
+    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+    response.setContentType("application/json");
+
+    ApiErrorResponse errorResponse = new ApiErrorResponse();
+    errorResponse.setSuccess(false);
+    errorResponse.setMessage("Authentication required.");
+
+    new ObjectMapper().writeValue(response.getWriter(), errorResponse);
+}))
             .formLogin(AbstractHttpConfigurer::disable)
 
             .logout(logout -> logout
