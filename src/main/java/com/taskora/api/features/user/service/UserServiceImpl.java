@@ -15,9 +15,8 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
-    private static final String DUMMY_HASH =
-            "$2a$10$7EqJtq98hPqEX7fNZaFWoOa2Fc.wG.5vT.J0y.f.gK5n8V1i8XZ8W";
-            
+    private final String dummyHash;
+
     public UserServiceImpl(
             UserRepository userRepository,
             UserMapper userMapper,
@@ -25,13 +24,14 @@ public class UserServiceImpl implements UserService {
         this.userRepository = userRepository;
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
+        this.dummyHash = passwordEncoder.encode("dummy-password-for-timing-safety");
     }
 
     @Override
     public LoginResponse login(LoginRequest request) {
         User user = userRepository.findByEmail(request.getEmail()).orElse(null);
 
-        String hashToCheck = (user != null) ? user.getPassword() : DUMMY_HASH;
+        String hashToCheck = (user != null) ? user.getPassword() : dummyHash;
         boolean passwordMatches =
                 passwordEncoder.matches(request.getPassword(), hashToCheck);
 
