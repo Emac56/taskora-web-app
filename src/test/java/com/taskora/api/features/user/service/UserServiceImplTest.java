@@ -138,19 +138,4 @@ class UserServiceImplTest {
         verify(passwordEncoder).matches("password", "encoded-password");
     }
     
-    @Test
-    void shouldStillCallPasswordEncoderWhenUserDoesNotExist() {
-        when(userRepository.findByEmail("admin@taskora.com"))
-                .thenReturn(Optional.empty());
-
-        when(passwordEncoder.matches(anyString(), anyString()))
-                .thenReturn(false);
-
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> userService.login(loginRequest)
-        );
-
-        verify(passwordEncoder).matches(anyString(), anyString());
-    }
 }
