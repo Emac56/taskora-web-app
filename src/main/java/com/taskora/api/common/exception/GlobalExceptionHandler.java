@@ -69,7 +69,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleGeneric(Exception exception) {
-        // TODO: i-log dito yung exception
+        
         ApiErrorResponse response = new ApiErrorResponse();
         response.setSuccess(false);
         response.setMessage("An unexpected error occurred.");
