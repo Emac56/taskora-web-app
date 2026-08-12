@@ -7,6 +7,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+
+import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 
 import com.taskora.api.common.dto.response.ApiErrorResponse;
 
@@ -80,5 +88,46 @@ class GlobalExceptionHandlerTest {
                 handler.handleResourceNotFound(exception);
 
         assertNull(response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER));
+    }
+    
+    @Test
+    void shouldHandleMethodArgumentNotValidException() {
+
+        FieldError fieldError = new FieldError(
+                "loginRequest", "email", "Invalid email format.");
+
+        BindingResult bindingResult = mock(BindingResult.class);
+        when(bindingResult.getFieldErrors())
+                .thenReturn(List.of(fieldError));
+
+        MethodArgumentNotValidException exception =
+                mock(MethodArgumentNotValidException.class);
+        when(exception.getBindingResult()).thenReturn(bindingResult);
+
+        ResponseEntity<ApiErrorResponse> response =
+                handler.handleValidation(exception);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals(false, response.getBody().isSuccess());
+        assertEquals(
+                "email: Invalid email format.",
+                response.getBody().getMessage()
+        );
+    }
+
+    @Test
+    void shouldHandleGenericException() {
+
+        Exception exception = new RuntimeException("Something broke.");
+
+        ResponseEntity<ApiErrorResponse> response =
+                handler.handleGeneric(exception);
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertEquals(false, response.getBody().isSuccess());
+        assertEquals(
+                "An unexpected error occurred.",
+                response.getBody().getMessage()
+        );
     }
 }
