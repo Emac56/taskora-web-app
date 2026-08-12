@@ -15,6 +15,7 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
+    private final String dummyHash;
 
     public UserServiceImpl(
             UserRepository userRepository,
@@ -23,14 +24,18 @@ public class UserServiceImpl implements UserService {
         this.userRepository = userRepository;
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
+        this.dummyHash = passwordEncoder.encode("dummy-password-for-timing-safety");
     }
 
     @Override
     public LoginResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new IllegalArgumentException("Invalid credentials."));
+        User user = userRepository.findByEmail(request.getEmail()).orElse(null);
 
-        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+        String hashToCheck = (user != null) ? user.getPassword() : dummyHash;
+        boolean passwordMatches =
+                passwordEncoder.matches(request.getPassword(), hashToCheck);
+
+        if (user == null || !passwordMatches) {
             throw new IllegalArgumentException("Invalid credentials.");
         }
 

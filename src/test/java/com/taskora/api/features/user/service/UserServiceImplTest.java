@@ -5,8 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import java.util.Optional;
-
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,7 +37,6 @@ class UserServiceImplTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
-    @InjectMocks
     private UserServiceImpl userService;
 
     private User user;
@@ -43,6 +45,11 @@ class UserServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        when(passwordEncoder.encode(anyString()))
+                .thenReturn("dummy-hash-value");
+
+        userService = new UserServiceImpl(userRepository, userMapper, passwordEncoder);
+
         user = new User();
         user.setId(1L);
         user.setName("Admin");
@@ -60,7 +67,7 @@ class UserServiceImplTest {
         loginResponse.setEmail("admin@taskora.com");
         loginResponse.setRole(Role.ADMIN);
     }
-
+    
     @Test
     void shouldLoginSuccessfullyWhenUserExists() {
         when(userRepository.findByEmail("admin@taskora.com"))
@@ -81,10 +88,13 @@ class UserServiceImplTest {
         verify(userMapper).toLoginResponse(user);
     }
 
-    @Test
+  @Test
     void shouldThrowExceptionWhenUserDoesNotExist() {
         when(userRepository.findByEmail("admin@taskora.com"))
                 .thenReturn(Optional.empty());
+
+        when(passwordEncoder.matches(eq("password"), anyString()))
+                .thenReturn(false);
 
         assertThrows(
                 IllegalArgumentException.class,
@@ -92,6 +102,23 @@ class UserServiceImplTest {
         );
 
         verify(userRepository).findByEmail("admin@taskora.com");
+        verify(passwordEncoder).matches(eq("password"), anyString());
+    }
+    
+    @Test
+    void shouldStillCallPasswordEncoderWhenUserDoesNotExist() {
+        when(userRepository.findByEmail("admin@taskora.com"))
+                .thenReturn(Optional.empty());
+
+        when(passwordEncoder.matches(anyString(), anyString()))
+                .thenReturn(false);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> userService.login(loginRequest)
+        );
+
+        verify(passwordEncoder).matches(anyString(), anyString());
     }
 
     @Test
@@ -110,4 +137,5 @@ class UserServiceImplTest {
         verify(userRepository).findByEmail("admin@taskora.com");
         verify(passwordEncoder).matches("password", "encoded-password");
     }
+    
 }
