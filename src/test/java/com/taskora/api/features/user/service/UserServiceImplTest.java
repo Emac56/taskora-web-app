@@ -37,18 +37,18 @@ class UserServiceImplTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
-    @InjectMocks
     private UserServiceImpl userService;
 
     private User user;
     private LoginRequest loginRequest;
     private LoginResponse loginResponse;
 
-  
-  @BeforeEach
+    @BeforeEach
     void setUp() {
         when(passwordEncoder.encode(anyString()))
                 .thenReturn("dummy-hash-value");
+
+        userService = new UserServiceImpl(userRepository, userMapper, passwordEncoder);
 
         user = new User();
         user.setId(1L);
