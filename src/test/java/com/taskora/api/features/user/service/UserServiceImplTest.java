@@ -6,7 +6,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
-
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -86,12 +87,16 @@ class UserServiceImplTest {
         when(userRepository.findByEmail("admin@taskora.com"))
                 .thenReturn(Optional.empty());
 
+        when(passwordEncoder.matches(eq("password"), anyString()))
+                .thenReturn(false);
+
         assertThrows(
                 IllegalArgumentException.class,
                 () -> userService.login(loginRequest)
         );
 
         verify(userRepository).findByEmail("admin@taskora.com");
+        verify(passwordEncoder).matches(eq("password"), anyString());
     }
 
     @Test
@@ -109,5 +114,21 @@ class UserServiceImplTest {
 
         verify(userRepository).findByEmail("admin@taskora.com");
         verify(passwordEncoder).matches("password", "encoded-password");
+    }
+    
+    @Test
+    void shouldStillCallPasswordEncoderWhenUserDoesNotExist() {
+        when(userRepository.findByEmail("admin@taskora.com"))
+                .thenReturn(Optional.empty());
+
+        when(passwordEncoder.matches(anyString(), anyString()))
+                .thenReturn(false);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> userService.login(loginRequest)
+        );
+
+        verify(passwordEncoder).matches(anyString(), anyString());
     }
 }

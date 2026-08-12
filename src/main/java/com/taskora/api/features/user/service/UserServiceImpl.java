@@ -15,7 +15,9 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
-
+    private static final String DUMMY_HASH =
+            "$2a$10$7EqJtq98hPqEX7fNZaFWoOa2Fc.wG.5vT.J0y.f.gK5n8V1i8XZ8W";
+            
     public UserServiceImpl(
             UserRepository userRepository,
             UserMapper userMapper,
@@ -27,10 +29,13 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public LoginResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new IllegalArgumentException("Invalid credentials."));
+        User user = userRepository.findByEmail(request.getEmail()).orElse(null);
 
-        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+        String hashToCheck = (user != null) ? user.getPassword() : DUMMY_HASH;
+        boolean passwordMatches =
+                passwordEncoder.matches(request.getPassword(), hashToCheck);
+
+        if (user == null || !passwordMatches) {
             throw new IllegalArgumentException("Invalid credentials.");
         }
 
