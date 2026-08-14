@@ -3,6 +3,7 @@ package com.taskora.api.features.user.entity;
 import com.taskora.api.common.entity.BaseEntity;
 import com.taskora.api.common.enums.Role;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -25,5 +26,8 @@ private String password;
 
 @Enumerated(EnumType.STRING)  
 private Role role;
+
+@Column(name = "firebase_uid", unique = true)
+private String firebaseUid;
 
 }
