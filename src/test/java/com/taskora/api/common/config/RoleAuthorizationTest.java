@@ -3,6 +3,7 @@ package com.taskora.api.common.config;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -108,6 +109,7 @@ class RoleAuthorizationTest {
 
         mockMvc.perform(
                 post("/api/v1/tutorials")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(createTutorialRequest()))
         )
@@ -119,6 +121,7 @@ class RoleAuthorizationTest {
     void clientCannotPostTutorial() throws Exception {
         mockMvc.perform(
                 post("/api/v1/tutorials")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(createTutorialRequest()))
         )
@@ -138,6 +141,7 @@ class RoleAuthorizationTest {
 
         mockMvc.perform(
                 put("/api/v1/tutorials/1")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateTutorialRequest()))
         )
@@ -149,6 +153,7 @@ class RoleAuthorizationTest {
     void clientCannotPutTutorial() throws Exception {
         mockMvc.perform(
                 put("/api/v1/tutorials/1")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateTutorialRequest()))
         )
@@ -160,14 +165,14 @@ class RoleAuthorizationTest {
     @Test
     @WithMockUser(roles = "ADMIN")
     void adminCanDeleteTutorial() throws Exception {
-        mockMvc.perform(delete("/api/v1/tutorials/1"))
+        mockMvc.perform(delete("/api/v1/tutorials/1").with(csrf()))
                 .andExpect(status().isNoContent());
     }
 
     @Test
     @WithMockUser(roles = "CLIENT")
     void clientCannotDeleteTutorial() throws Exception {
-        mockMvc.perform(delete("/api/v1/tutorials/1"))
+        mockMvc.perform(delete("/api/v1/tutorials/1").with(csrf()))
                 .andExpect(status().isForbidden());
     }
 
@@ -200,6 +205,7 @@ class RoleAuthorizationTest {
 
         mockMvc.perform(
                 post("/api/v1/tutorials/1/steps")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(createStepRequest()))
         )
@@ -211,6 +217,7 @@ class RoleAuthorizationTest {
     void clientCannotPostTutorialStep() throws Exception {
         mockMvc.perform(
                 post("/api/v1/tutorials/1/steps")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(createStepRequest()))
         )
@@ -230,6 +237,7 @@ class RoleAuthorizationTest {
 
         mockMvc.perform(
                 put("/api/v1/tutorial-steps/10")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateStepRequest()))
         )
@@ -241,6 +249,7 @@ class RoleAuthorizationTest {
     void clientCannotPutTutorialStep() throws Exception {
         mockMvc.perform(
                 put("/api/v1/tutorial-steps/10")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateStepRequest()))
         )
@@ -252,14 +261,14 @@ class RoleAuthorizationTest {
     @Test
     @WithMockUser(roles = "ADMIN")
     void adminCanDeleteTutorialStep() throws Exception {
-        mockMvc.perform(delete("/api/v1/tutorial-steps/10"))
+        mockMvc.perform(delete("/api/v1/tutorial-steps/10").with(csrf()))
                 .andExpect(status().isNoContent());
     }
 
     @Test
     @WithMockUser(roles = "CLIENT")
     void clientCannotDeleteTutorialStep() throws Exception {
-        mockMvc.perform(delete("/api/v1/tutorial-steps/10"))
+        mockMvc.perform(delete("/api/v1/tutorial-steps/10").with(csrf()))
                 .andExpect(status().isForbidden());
     }
 
@@ -269,6 +278,7 @@ class RoleAuthorizationTest {
     void unauthenticatedRequestToProtectedEndpointIsRejected() throws Exception {
         mockMvc.perform(
                 post("/api/v1/tutorials")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(createTutorialRequest()))
         )

@@ -2,6 +2,7 @@ package com.taskora.api.features.user.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -49,10 +50,10 @@ class LoginSessionTest {
 
     @MockBean
     private LoginRateLimiter loginRateLimiter;
-    
+
     @MockBean
     private ClientIpResolver clientIpResolver;
-    
+
     private LoginRequest validLoginRequest() {
         LoginRequest request = new LoginRequest();
         request.setEmail("admin@taskora.com");
@@ -82,6 +83,8 @@ class LoginSessionTest {
         when(userService.login(any(LoginRequest.class)))
                 .thenReturn(validLoginResponse());
 
+        // /api/v1/users/login is CSRF-exempt (no session exists yet at this
+        // point), so no .with(csrf()) needed here.
         mockMvc.perform(
                 post("/api/v1/users/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -100,13 +103,14 @@ class LoginSessionTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(validLoginRequest()))
         )
-.andExpect(status().isUnauthorized());
+        .andExpect(status().isUnauthorized());
     }
 
     @Test
     void protectedEndpointShouldRejectUnauthenticatedRequest() throws Exception {
         mockMvc.perform(
                 post("/api/v1/tutorials")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(tutorialRequest()))
         )
@@ -139,6 +143,7 @@ class LoginSessionTest {
 
         mockMvc.perform(
                 post("/api/v1/tutorials")
+                        .with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(tutorialRequest()))
@@ -164,19 +169,21 @@ class LoginSessionTest {
 
         mockMvc.perform(
                 post("/api/v1/users/logout")
+                        .with(csrf())
                         .session(session)
         )
         .andExpect(status().isNoContent());
 
         mockMvc.perform(
                 post("/api/v1/tutorials")
+                        .with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(tutorialRequest()))
         )
         .andExpect(status().isUnauthorized());
     }
-    
+
     @Test
     void loginShouldRotateSessionIdToPreventFixation() throws Exception {
 
