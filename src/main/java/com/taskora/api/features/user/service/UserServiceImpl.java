@@ -3,6 +3,7 @@ package com.taskora.api.features.user.service;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.taskora.api.common.exception.InvalidCredentialsException;
 import com.taskora.api.features.user.dto.request.LoginRequest;
 import com.taskora.api.features.user.dto.response.LoginResponse;
 import com.taskora.api.features.user.entity.User;
@@ -36,7 +37,7 @@ public class UserServiceImpl implements UserService {
                 passwordEncoder.matches(request.getPassword(), hashToCheck);
 
         if (user == null || !passwordMatches) {
-            throw new IllegalArgumentException("Invalid credentials.");
+            throw new InvalidCredentialsException("Invalid credentials.");
         }
 
         return userMapper.toLoginResponse(user);
