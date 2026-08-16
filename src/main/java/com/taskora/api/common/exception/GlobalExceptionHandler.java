@@ -24,9 +24,10 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.NOT_FOUND)
                 .body(response);
     }
-    @ExceptionHandler(IllegalArgumentException.class)
+
+    @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ApiErrorResponse> handleInvalidCredentials(
-            IllegalArgumentException exception) {
+            InvalidCredentialsException exception) {
 
         ApiErrorResponse response = new ApiErrorResponse();
 
@@ -53,6 +54,7 @@ public class GlobalExceptionHandler {
                         String.valueOf(exception.getRetryAfterSeconds()))
                 .body(response);
     }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleValidation(
             MethodArgumentNotValidException exception) {
@@ -69,7 +71,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleGeneric(Exception exception) {
-        
+
         ApiErrorResponse response = new ApiErrorResponse();
         response.setSuccess(false);
         response.setMessage("An unexpected error occurred.");

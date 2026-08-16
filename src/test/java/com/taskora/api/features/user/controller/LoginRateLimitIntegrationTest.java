@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.taskora.api.common.config.SecurityConfig;
 import com.taskora.api.common.enums.Role;
+import com.taskora.api.common.exception.InvalidCredentialsException;
 import com.taskora.api.common.ratelimit.LoginRateLimiter;
 import com.taskora.api.common.util.ClientIpResolver;
 import com.taskora.api.features.user.dto.request.LoginRequest;
@@ -75,7 +76,7 @@ class LoginRateLimitIntegrationTest {
         .andExpect(status().isOk());
 
         when(userService.login(any(LoginRequest.class)))
-                .thenThrow(new IllegalArgumentException("Invalid credentials."));
+                .thenThrow(new InvalidCredentialsException("Invalid credentials."));
 
         // Attempts 2-5 — still within limit (5 max), rejected only due to wrong credentials
         for (int attempt = 2; attempt <= 5; attempt++) {

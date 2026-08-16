@@ -43,8 +43,8 @@ class GlobalExceptionHandlerTest {
     @Test
     void shouldHandleInvalidCredentialsException() {
 
-        IllegalArgumentException exception =
-                new IllegalArgumentException("Invalid username or password.");
+        InvalidCredentialsException exception =
+                new InvalidCredentialsException("Invalid username or password.");
 
         ResponseEntity<ApiErrorResponse> response =
                 handler.handleInvalidCredentials(exception);
@@ -89,7 +89,7 @@ class GlobalExceptionHandlerTest {
 
         assertNull(response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER));
     }
-    
+
     @Test
     void shouldHandleMethodArgumentNotValidException() {
 

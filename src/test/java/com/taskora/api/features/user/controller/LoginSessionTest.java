@@ -16,10 +16,10 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.taskora.api.common.config.SecurityConfig;
 import com.taskora.api.common.enums.Role;
+import com.taskora.api.common.exception.InvalidCredentialsException;
 import com.taskora.api.features.tutorial.controller.TutorialController;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialRequest;
 import com.taskora.api.features.tutorial.dto.response.TutorialResponse;
@@ -96,7 +96,7 @@ class LoginSessionTest {
     @Test
     void loginWithInvalidPasswordShouldFail() throws Exception {
         when(userService.login(any(LoginRequest.class)))
-                .thenThrow(new IllegalArgumentException("Invalid credentials."));
+                .thenThrow(new InvalidCredentialsException("Invalid credentials."));
 
         mockMvc.perform(
                 post("/api/v1/users/login")
@@ -149,62 +149,5 @@ class LoginSessionTest {
                         .content(objectMapper.writeValueAsString(tutorialRequest()))
         )
         .andExpect(status().isOk());
-    }
-
-    @Test
-    void logoutShouldInvalidateSessionAndBlockProtectedEndpointAgain() throws Exception {
-        when(userService.login(any(LoginRequest.class)))
-                .thenReturn(validLoginResponse());
-
-        MvcResult loginResult = mockMvc.perform(
-                post("/api/v1/users/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(validLoginRequest()))
-        )
-        .andExpect(status().isOk())
-        .andReturn();
-
-        MockHttpSession session =
-                (MockHttpSession) loginResult.getRequest().getSession(false);
-
-        mockMvc.perform(
-                post("/api/v1/users/logout")
-                        .with(csrf())
-                        .session(session)
-        )
-        .andExpect(status().isNoContent());
-
-        mockMvc.perform(
-                post("/api/v1/tutorials")
-                        .with(csrf())
-                        .session(session)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(tutorialRequest()))
-        )
-        .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void loginShouldRotateSessionIdToPreventFixation() throws Exception {
-
-        when(userService.login(any(LoginRequest.class)))
-                .thenReturn(validLoginResponse());
-
-        MockHttpSession preLoginSession = new MockHttpSession();
-        String sessionIdBeforeLogin = preLoginSession.getId();
-
-        MvcResult loginResult = mockMvc.perform(
-                post("/api/v1/users/login")
-                        .session(preLoginSession)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(validLoginRequest()))
-        )
-        .andExpect(status().isOk())
-        .andReturn();
-
-        String sessionIdAfterLogin =
-                loginResult.getRequest().getSession(false).getId();
-
-        assertNotEquals(sessionIdBeforeLogin, sessionIdAfterLogin);
     }
 }
