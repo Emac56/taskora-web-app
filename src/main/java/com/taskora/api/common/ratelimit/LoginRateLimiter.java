@@ -2,6 +2,7 @@ package com.taskora.api.common.ratelimit;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongSupplier;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +27,7 @@ public class LoginRateLimiter {
     private final LongSupplier clock;
 
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
+    private final AtomicLong lastCleanup;
 
     /**
      * Primary constructor for Spring dependency injection.
@@ -47,9 +49,12 @@ public class LoginRateLimiter {
         this.maxAttempts = maxAttempts;
         this.windowMillis = windowSeconds * 1000L;
         this.clock = clock;
+        this.lastCleanup = new AtomicLong(clock.getAsLong());
     }
 
     public void checkAllowed(String clientId) {
+        maybeCleanupExpiredBuckets();
+
         Bucket bucket = buckets.computeIfAbsent(
                 clientId, key -> new Bucket(clock.getAsLong()));
 
@@ -72,6 +77,39 @@ public class LoginRateLimiter {
                         retryAfterSeconds);
             }
         }
+    }
+
+    /**
+     * Sweeps buckets whose window has already expired, so memory does not
+     * grow without bound over the life of the process. Runs at most once
+     * per window length, triggered opportunistically by incoming requests
+     * rather than a background scheduler.
+     */
+    private void maybeCleanupExpiredBuckets() {
+        long now = clock.getAsLong();
+        long last = lastCleanup.get();
+
+        if (now - last < windowMillis) {
+            return;
+        }
+        if (!lastCleanup.compareAndSet(last, now)) {
+            return;
+        }
+
+        buckets.entrySet().removeIf(entry -> {
+            Bucket bucket = entry.getValue();
+            synchronized (bucket) {
+                return now - bucket.windowStart >= windowMillis;
+            }
+        });
+    }
+
+    /**
+     * Visible for testing: exposes current bucket count so tests can verify
+     * that stale entries are evicted instead of accumulating forever.
+     */
+    int bucketCount() {
+        return buckets.size();
     }
 
     private static final class Bucket {

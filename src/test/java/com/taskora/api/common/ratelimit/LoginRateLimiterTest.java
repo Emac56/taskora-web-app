@@ -1,6 +1,7 @@
 package com.taskora.api.common.ratelimit;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -57,5 +58,31 @@ class LoginRateLimiterTest {
 
         assertDoesNotThrow(() -> limiter.checkAllowed("127.0.0.1"));
         assertDoesNotThrow(() -> limiter.checkAllowed("192.168.0.1"));
+    }
+
+    @Test
+    void evictsExpiredBucketsOverTime() {
+        AtomicLong fakeTime = new AtomicLong(0L);
+        LoginRateLimiter limiter = new LoginRateLimiter(5, 1, fakeTime::get);
+
+        limiter.checkAllowed("127.0.0.1");
+        assertEquals(1, limiter.bucketCount());
+
+        fakeTime.addAndGet(2000);
+        limiter.checkAllowed("192.168.0.1");
+
+        assertEquals(1, limiter.bucketCount());
+    }
+
+    @Test
+    void doesNotEvictActiveBucketWithinWindow() {
+        AtomicLong fakeTime = new AtomicLong(0L);
+        LoginRateLimiter limiter = new LoginRateLimiter(5, 60, fakeTime::get);
+
+        limiter.checkAllowed("127.0.0.1");
+        fakeTime.addAndGet(1000);
+        limiter.checkAllowed("127.0.0.1");
+
+        assertEquals(1, limiter.bucketCount());
     }
 }
