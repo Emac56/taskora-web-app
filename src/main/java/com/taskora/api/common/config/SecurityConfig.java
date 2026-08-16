@@ -16,6 +16,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -49,7 +52,7 @@ public class SecurityConfig {
         configuration.setAllowedMethods(
                 List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(
-                List.of("Content-Type", "Authorization"));
+                List.of("Content-Type", "Authorization", "X-XSRF-TOKEN"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
@@ -67,7 +70,15 @@ public class SecurityConfig {
 
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource))
-            .csrf(AbstractHttpConfigurer::disable)
+            .csrf(csrf -> csrf
+                    .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                    .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+                    // No session exists yet at login time, so there's nothing
+                    // for the CSRF cookie to protect on this specific request.
+                    // Brute-force / automated login attempts are covered by
+                    // LoginRateLimiter instead.
+                    .ignoringRequestMatchers("/api/v1/users/login"))
+            .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
             .sessionManagement(session -> session
                     .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
             .securityContext(context -> context
@@ -96,8 +107,8 @@ public class SecurityConfig {
                         .hasRole(ROLE_ADMIN)
                     .anyRequest().authenticated())
             .exceptionHandling(exception -> exception
-            
-            
+
+
 .authenticationEntryPoint((request, response, authException) -> {
     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
     response.setContentType("application/json");

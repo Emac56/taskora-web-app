@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -50,10 +51,10 @@ class LogoutTest {
 
     @MockBean
     private LoginRateLimiter loginRateLimiter;
-    
+
     @MockBean
     private ClientIpResolver clientIpResolver;
-    
+
     private LoginRequest validLoginRequest() {
         LoginRequest request = new LoginRequest();
         request.setEmail("admin@taskora.com");
@@ -82,6 +83,7 @@ class LogoutTest {
         when(userService.login(any(LoginRequest.class)))
                 .thenReturn(validLoginResponse());
 
+        // /api/v1/users/login is CSRF-exempt, no .with(csrf()) needed here.
         MvcResult loginResult = mockMvc.perform(
                 post("/api/v1/users/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -99,6 +101,7 @@ class LogoutTest {
 
         mockMvc.perform(
                 post("/api/v1/users/logout")
+                        .with(csrf())
                         .session(session)
         )
         .andExpect(status().isNoContent());
@@ -110,6 +113,7 @@ class LogoutTest {
 
         mockMvc.perform(
                 post("/api/v1/users/logout")
+                        .with(csrf())
                         .session(session)
         )
         .andExpect(status().isNoContent());
@@ -118,6 +122,7 @@ class LogoutTest {
 
         mockMvc.perform(
                 post("/api/v1/tutorials")
+                        .with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(tutorialRequest()))
@@ -129,6 +134,7 @@ class LogoutTest {
     void logoutWithoutAuthenticationReturnsNoContent() throws Exception {
         MvcResult result = mockMvc.perform(
                 post("/api/v1/users/logout")
+                        .with(csrf())
         )
         .andExpect(status().isNoContent())
         .andReturn();

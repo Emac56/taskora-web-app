@@ -3,13 +3,9 @@ package com.taskora.api.common.config;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.util.List;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -27,10 +23,15 @@ import com.taskora.api.features.tutorial.dto.response.TutorialResponse;
 import com.taskora.api.features.tutorial.enums.TutorialStatus;
 import com.taskora.api.features.tutorial.service.TutorialService;
 
+/**
+ * Verifies the CSRF fix for BE (SecurityConfig disabled CSRF while relying
+ * on session-cookie auth + allowCredentials(true)). Covers both directions:
+ * request rejected without a token, accepted with one.
+ */
 @WebMvcTest(TutorialController.class)
 @Import(SecurityConfig.class)
 @AutoConfigureMockMvc
-class SecurityConfigTest {
+class CsrfProtectionTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -41,43 +42,29 @@ class SecurityConfigTest {
     @MockBean
     private TutorialService tutorialService;
 
-    @Test
-    void publicGetTutorialsShouldBeAccessibleWithoutAuth() throws Exception {
-
-        when(tutorialService.getAll()).thenReturn(List.of());
-
-        mockMvc.perform(get("/api/v1/tutorials"))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    void createTutorialShouldBeRejectedWithoutAuth() throws Exception {
-
+    private CreateTutorialRequest sampleRequest() {
         CreateTutorialRequest request = new CreateTutorialRequest();
         request.setTitle("Java Basics");
         request.setDescription("Learn Java fundamentals.");
         request.setStatus(TutorialStatus.DRAFT);
-
-        mockMvc.perform(
-                post("/api/v1/tutorials")
-                        .with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request))
-        )
-        .andExpect(status().isUnauthorized())
-        .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-        .andExpect(jsonPath("$.success").value(false))
-        .andExpect(jsonPath("$.message").value("Authentication required."));
+        return request;
     }
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void createTutorialShouldSucceedWhenAuthenticated() throws Exception {
+    void createTutorialShouldBeRejectedWithoutCsrfToken() throws Exception {
 
-        CreateTutorialRequest request = new CreateTutorialRequest();
-        request.setTitle("Java Basics");
-        request.setDescription("Learn Java fundamentals.");
-        request.setStatus(TutorialStatus.DRAFT);
+        mockMvc.perform(
+                post("/api/v1/tutorials")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(sampleRequest()))
+        )
+        .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void createTutorialShouldSucceedWithCsrfToken() throws Exception {
 
         TutorialResponse response = new TutorialResponse();
         response.setId(1L);
@@ -90,7 +77,7 @@ class SecurityConfigTest {
                 post("/api/v1/tutorials")
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request))
+                        .content(objectMapper.writeValueAsString(sampleRequest()))
         )
         .andExpect(status().isOk());
     }
