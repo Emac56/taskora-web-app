@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import com.taskora.api.common.dto.response.ApiErrorResponse;
 
 @RestControllerAdvice
@@ -53,6 +54,39 @@ public class GlobalExceptionHandler {
                 .header(HttpHeaders.RETRY_AFTER,
                         String.valueOf(exception.getRetryAfterSeconds()))
                 .body(response);
+    }
+
+    @ExceptionHandler(InvalidFileException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidFile(
+            InvalidFileException exception) {
+
+        ApiErrorResponse response = new ApiErrorResponse();
+        response.setSuccess(false);
+        response.setMessage(exception.getMessage());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiErrorResponse> handleMaxUploadSizeExceeded(
+            MaxUploadSizeExceededException exception) {
+
+        ApiErrorResponse response = new ApiErrorResponse();
+        response.setSuccess(false);
+        response.setMessage("Uploaded file is too large.");
+
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(response);
+    }
+
+    @ExceptionHandler(ImageUploadException.class)
+    public ResponseEntity<ApiErrorResponse> handleImageUpload(
+            ImageUploadException exception) {
+
+        ApiErrorResponse response = new ApiErrorResponse();
+        response.setSuccess(false);
+        response.setMessage(exception.getMessage());
+
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(response);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
