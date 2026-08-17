@@ -98,7 +98,6 @@ public class SecurityConfig {
         "/api/v1/tutorials/*/steps",
         "/api/v1/tutorial-steps/images")
     .hasRole(ROLE_ADMIN)
-                        .hasRole(ROLE_ADMIN)
                     .requestMatchers(HttpMethod.PUT,
                             "/api/v1/tutorials/*",
                             "/api/v1/tutorial-steps/*")
