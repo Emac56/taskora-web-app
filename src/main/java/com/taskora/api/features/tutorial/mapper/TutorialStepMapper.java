@@ -15,6 +15,7 @@ public class TutorialStepMapper {
 
         tutorialStep.setStepNumber(request.getStepNumber());
         tutorialStep.setInstruction(request.getInstruction());
+        tutorialStep.setImageUrl(request.getImageUrl());
 
         return tutorialStep;
     }
@@ -25,6 +26,7 @@ public class TutorialStepMapper {
 
         tutorialStep.setStepNumber(request.getStepNumber());
         tutorialStep.setInstruction(request.getInstruction());
+        tutorialStep.setImageUrl(request.getImageUrl());
     }
 
     public TutorialStepResponse toResponse(TutorialStep tutorialStep) {
