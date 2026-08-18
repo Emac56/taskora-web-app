@@ -1,5 +1,7 @@
 package com.taskora.api.common.exception;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -11,6 +13,8 @@ import com.taskora.api.common.dto.response.ApiErrorResponse;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleResourceNotFound(
@@ -105,6 +109,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleGeneric(Exception exception) {
+
+        // Log the real exception server-side - the client only ever sees
+        // the generic message below, but we need this to debug.
+        log.error("Unhandled exception", exception);
 
         ApiErrorResponse response = new ApiErrorResponse();
         response.setSuccess(false);
