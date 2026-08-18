@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -19,9 +20,11 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.taskora.api.common.storage.SupabaseStorageClient;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialStepRequest;
 import com.taskora.api.features.tutorial.dto.request.UpdateTutorialStepRequest;
 import com.taskora.api.features.tutorial.dto.response.TutorialStepResponse;
@@ -40,26 +43,23 @@ class TutorialStepControllerTest {
     @MockBean
     private TutorialStepService tutorialStepService;
 
+    @MockBean
+    private SupabaseStorageClient supabaseStorageClient;
+
     @Test
     void shouldCreateTutorialStep() throws Exception {
-
-        CreateTutorialStepRequest request =
-                new CreateTutorialStepRequest();
-
+        CreateTutorialStepRequest request = new CreateTutorialStepRequest();
         request.setStepNumber(1);
         request.setInstruction("Open the project.");
+        request.setImageUrl("https://example.com/image.png");
 
-        TutorialStepResponse response =
-                new TutorialStepResponse();
-
+        TutorialStepResponse response = new TutorialStepResponse();
         response.setId(10L);
         response.setStepNumber(1);
         response.setInstruction("Open the project.");
         response.setImageUrl("https://example.com/image.png");
 
-        when(tutorialStepService.create(
-                eq(1L),
-                any(CreateTutorialStepRequest.class)))
+        when(tutorialStepService.create(eq(1L), any(CreateTutorialStepRequest.class)))
                 .thenReturn(response);
 
         mockMvc.perform(
@@ -70,57 +70,40 @@ class TutorialStepControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(10))
         .andExpect(jsonPath("$.stepNumber").value(1))
-        .andExpect(jsonPath("$.instruction")
-                .value("Open the project."))
-        .andExpect(jsonPath("$.imageUrl")
-                .value("https://example.com/image.png"));
+        .andExpect(jsonPath("$.instruction").value("Open the project."))
+        .andExpect(jsonPath("$.imageUrl").value("https://example.com/image.png"));
 
-        verify(tutorialStepService).create(
-                eq(1L),
-                any(CreateTutorialStepRequest.class));
+        verify(tutorialStepService).create(eq(1L), any(CreateTutorialStepRequest.class));
     }
 
     @Test
     void shouldGetTutorialStepById() throws Exception {
-
-        TutorialStepResponse response =
-                new TutorialStepResponse();
-
+        TutorialStepResponse response = new TutorialStepResponse();
         response.setId(10L);
         response.setStepNumber(1);
         response.setInstruction("Open the project.");
         response.setImageUrl("https://example.com/image.png");
 
-        when(tutorialStepService.getById(10L))
-                .thenReturn(response);
+        when(tutorialStepService.getById(10L)).thenReturn(response);
 
-        mockMvc.perform(
-                get("/api/v1/tutorial-steps/10")
-        )
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.id").value(10))
-        .andExpect(jsonPath("$.stepNumber").value(1))
-        .andExpect(jsonPath("$.instruction")
-                .value("Open the project."))
-        .andExpect(jsonPath("$.imageUrl")
-                .value("https://example.com/image.png"));
+        mockMvc.perform(get("/api/v1/tutorial-steps/10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(10))
+                .andExpect(jsonPath("$.stepNumber").value(1))
+                .andExpect(jsonPath("$.instruction").value("Open the project."))
+                .andExpect(jsonPath("$.imageUrl").value("https://example.com/image.png"));
 
         verify(tutorialStepService).getById(10L);
     }
 
     @Test
     void shouldGetAllTutorialStepsByTutorialId() throws Exception {
-
-        TutorialStepResponse first =
-                new TutorialStepResponse();
-
+        TutorialStepResponse first = new TutorialStepResponse();
         first.setId(10L);
         first.setStepNumber(1);
         first.setInstruction("Open the project.");
 
-        TutorialStepResponse second =
-                new TutorialStepResponse();
-
+        TutorialStepResponse second = new TutorialStepResponse();
         second.setId(11L);
         second.setStepNumber(2);
         second.setInstruction("Create a Java class.");
@@ -128,39 +111,31 @@ class TutorialStepControllerTest {
         when(tutorialStepService.getAllByTutorialId(1L))
                 .thenReturn(List.of(first, second));
 
-        mockMvc.perform(
-                get("/api/v1/tutorials/1/steps")
-        )
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(2))
-        .andExpect(jsonPath("$[0].id").value(10))
-        .andExpect(jsonPath("$[0].stepNumber").value(1))
-        .andExpect(jsonPath("$[1].id").value(11))
-        .andExpect(jsonPath("$[1].stepNumber").value(2));
+        mockMvc.perform(get("/api/v1/tutorials/1/steps"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(10))
+                .andExpect(jsonPath("$[0].stepNumber").value(1))
+                .andExpect(jsonPath("$[1].id").value(11))
+                .andExpect(jsonPath("$[1].stepNumber").value(2));
 
-        verify(tutorialStepService)
-                .getAllByTutorialId(1L);
+        verify(tutorialStepService).getAllByTutorialId(1L);
     }
 
     @Test
     void shouldUpdateTutorialStep() throws Exception {
-
-        UpdateTutorialStepRequest request =
-                new UpdateTutorialStepRequest();
-
+        UpdateTutorialStepRequest request = new UpdateTutorialStepRequest();
         request.setStepNumber(2);
         request.setInstruction("Create a Java class.");
+        request.setImageUrl("https://example.com/updated.png");
 
-        TutorialStepResponse response =
-                new TutorialStepResponse();
-
+        TutorialStepResponse response = new TutorialStepResponse();
         response.setId(10L);
         response.setStepNumber(2);
         response.setInstruction("Create a Java class.");
+        response.setImageUrl("https://example.com/updated.png");
 
-        when(tutorialStepService.update(
-                eq(10L),
-                any(UpdateTutorialStepRequest.class)))
+        when(tutorialStepService.update(eq(10L), any(UpdateTutorialStepRequest.class)))
                 .thenReturn(response);
 
         mockMvc.perform(
@@ -171,32 +146,44 @@ class TutorialStepControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(10))
         .andExpect(jsonPath("$.stepNumber").value(2))
-        .andExpect(jsonPath("$.instruction")
-                .value("Create a Java class."));
+        .andExpect(jsonPath("$.instruction").value("Create a Java class."))
+        .andExpect(jsonPath("$.imageUrl").value("https://example.com/updated.png"));
 
-        verify(tutorialStepService).update(
-                eq(10L),
-                any(UpdateTutorialStepRequest.class));
+        verify(tutorialStepService).update(eq(10L), any(UpdateTutorialStepRequest.class));
     }
 
     @Test
     void shouldDeleteTutorialStep() throws Exception {
-
-        mockMvc.perform(
-                delete("/api/v1/tutorial-steps/10")
-        )
-        .andExpect(status().isNoContent());
+        mockMvc.perform(delete("/api/v1/tutorial-steps/10"))
+                .andExpect(status().isNoContent());
 
         verify(tutorialStepService).delete(10L);
     }
 
     @Test
-    void shouldReturnBadRequestWhenCreatingInvalidTutorialStep()
-            throws Exception {
+    void shouldUploadImageSuccessfully() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "test.png",
+                "image/png",
+                "content".getBytes()
+        );
 
-        CreateTutorialStepRequest request =
-                new CreateTutorialStepRequest();
+        when(supabaseStorageClient.upload(any())).thenReturn("https://storage.example.com/test.png");
 
+        mockMvc.perform(
+                multipart("/api/v1/tutorial-steps/images")
+                        .file(file)
+        )
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.imageUrl").value("https://storage.example.com/test.png"));
+
+        verify(supabaseStorageClient).upload(any());
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenCreatingInvalidTutorialStep() throws Exception {
+        CreateTutorialStepRequest request = new CreateTutorialStepRequest();
         request.setStepNumber(null);
         request.setInstruction("");
 
@@ -209,12 +196,8 @@ class TutorialStepControllerTest {
     }
 
     @Test
-    void shouldReturnBadRequestWhenUpdatingInvalidTutorialStep()
-            throws Exception {
-
-        UpdateTutorialStepRequest request =
-                new UpdateTutorialStepRequest();
-
+    void shouldReturnBadRequestWhenUpdatingInvalidTutorialStep() throws Exception {
+        UpdateTutorialStepRequest request = new UpdateTutorialStepRequest();
         request.setStepNumber(null);
         request.setInstruction("");
 
