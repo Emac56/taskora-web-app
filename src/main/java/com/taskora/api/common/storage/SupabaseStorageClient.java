@@ -14,11 +14,30 @@ import org.springframework.web.multipart.MultipartFile;
 import com.taskora.api.common.exception.ImageUploadException;
 import com.taskora.api.common.exception.InvalidFileException;
 
-// Uploads files to Supabase Storage using the service role key.
-// This key must never be exposed to the frontend — it grants full
-// bucket write access, which is why the upload happens server-side.
+/**
+ * Uploads files to Supabase Storage using the service role key.
+ *
+ * <p>Two headers are required on every request, for two different reasons:
+ * <ul>
+ *   <li>{@code apikey} — checked by Supabase's gateway (Kong) in front of
+ *       every service. Identifies which project this request belongs to.
+ *       Missing this gets the request rejected before it reaches Storage.</li>
+ *   <li>{@code Authorization: Bearer} — checked by the Storage service
+ *       itself. Identifies who is making the request (service role bypasses
+ *       RLS, unlike the anon/authenticated roles).</li>
+ * </ul>
+ * Both happen to use the same key value here, but they're evaluated by
+ * different layers — dropping either one breaks the upload.
+ *
+ * <p>The service role key must never be exposed to the frontend — it
+ * grants full bucket write access, which is why upload happens server-side.
+ */
 @Component
 public class SupabaseStorageClient {
+
+    private static final String HEADER_API_KEY = "apikey";
+    private static final String HEADER_AUTHORIZATION = "Authorization";
+    private static final String BEARER_PREFIX = "Bearer ";
 
     private static final List<String> ALLOWED_CONTENT_TYPES =
             List.of("image/png", "image/jpeg", "image/webp");
@@ -39,7 +58,8 @@ public class SupabaseStorageClient {
 
         this.restClient = restClientBuilder
                 .baseUrl(supabaseUrl + "/storage/v1/object/" + bucket)
-                .defaultHeader("Authorization", "Bearer " + serviceRoleKey)
+                .defaultHeader(HEADER_API_KEY, serviceRoleKey)
+                .defaultHeader(HEADER_AUTHORIZATION, BEARER_PREFIX + serviceRoleKey)
                 .build();
     }
 
@@ -87,4 +107,4 @@ public class SupabaseStorageClient {
 
         return originalFilename.substring(originalFilename.lastIndexOf('.'));
     }
-  }
+}
