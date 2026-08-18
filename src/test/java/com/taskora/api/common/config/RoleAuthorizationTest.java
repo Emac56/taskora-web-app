@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -17,10 +18,12 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.taskora.api.common.storage.SupabaseStorageClient;
 import com.taskora.api.features.tutorial.controller.TutorialController;
 import com.taskora.api.features.tutorial.controller.TutorialStepController;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialRequest;
@@ -49,6 +52,9 @@ class RoleAuthorizationTest {
 
     @MockBean
     private TutorialStepService tutorialStepService;
+
+    @MockBean
+    private SupabaseStorageClient supabaseStorageClient;
 
     private CreateTutorialRequest createTutorialRequest() {
         CreateTutorialRequest request = new CreateTutorialRequest();
@@ -270,6 +276,39 @@ class RoleAuthorizationTest {
     void clientCannotDeleteTutorialStep() throws Exception {
         mockMvc.perform(delete("/api/v1/tutorial-steps/10").with(csrf()))
                 .andExpect(status().isForbidden());
+    }
+
+    // ---------- POST image upload: ADMIN only ----------
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void adminCanUploadStepImage() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "test.png", "image/png", "img-data".getBytes()
+        );
+        when(supabaseStorageClient.upload(any())).thenReturn("https://storage.example.com/test.png");
+
+        mockMvc.perform(
+                multipart("/api/v1/tutorial-steps/images")
+                        .file(file)
+                        .with(csrf())
+        )
+        .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(roles = "CLIENT")
+    void clientCannotUploadStepImage() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "test.png", "image/png", "img-data".getBytes()
+        );
+
+        mockMvc.perform(
+                multipart("/api/v1/tutorial-steps/images")
+                        .file(file)
+                        .with(csrf())
+        )
+        .andExpect(status().isForbidden());
     }
 
     // ---------- Unauthenticated ----------
