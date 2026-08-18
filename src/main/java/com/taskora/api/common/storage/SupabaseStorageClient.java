@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -34,6 +36,8 @@ import com.taskora.api.common.exception.InvalidFileException;
  */
 @Component
 public class SupabaseStorageClient {
+
+    private static final Logger log = LoggerFactory.getLogger(SupabaseStorageClient.class);
 
     private static final String HEADER_API_KEY = "apikey";
     private static final String HEADER_AUTHORIZATION = "Authorization";
@@ -78,6 +82,7 @@ public class SupabaseStorageClient {
                     .retrieve()
                     .toBodilessEntity();
         } catch (IOException | RestClientException exception) {
+            log.error("Supabase upload failed for object '{}'", objectPath, exception);
             throw new ImageUploadException(
                     "Failed to upload image to storage.");
         }
