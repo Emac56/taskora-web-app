@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -51,7 +52,7 @@ class TutorialStepRepositoryTest {
     }
 
     @Test
-    void shouldFindAllTutorialSteps() {
+    void shouldFindAllTutorialStepsOrderedByStepNumberAsc() {
         Tutorial tutorial = new Tutorial();
         tutorial.setTitle("Java Basics");
         tutorial.setDescription("Learn Java fundamentals.");
@@ -59,20 +60,27 @@ class TutorialStepRepositoryTest {
 
         Tutorial savedTutorial = tutorialRepository.save(tutorial);
 
-        TutorialStep firstStep = new TutorialStep();
-        firstStep.setTutorial(savedTutorial);
-        firstStep.setStepNumber(1);
-        firstStep.setInstruction("Open the project.");
-
+        // Save Step 2 first into DB
         TutorialStep secondStep = new TutorialStep();
         secondStep.setTutorial(savedTutorial);
         secondStep.setStepNumber(2);
         secondStep.setInstruction("Create a Java class.");
-
-        tutorialStepRepository.save(firstStep);
         tutorialStepRepository.save(secondStep);
 
-        assertEquals(2, tutorialStepRepository.findAll().size());
+        // Save Step 1 second into DB
+        TutorialStep firstStep = new TutorialStep();
+        firstStep.setTutorial(savedTutorial);
+        firstStep.setStepNumber(1);
+        firstStep.setInstruction("Open the project.");
+        tutorialStepRepository.save(firstStep);
+
+        List<TutorialStep> steps =
+                tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(savedTutorial.getId());
+
+        assertEquals(2, steps.size());
+        // Verify that steps are returned ordered by stepNumber ascending (Step 1 first, then Step 2)
+        assertEquals(1, steps.get(0).getStepNumber());
+        assertEquals(2, steps.get(1).getStepNumber());
     }
 
     @Test
