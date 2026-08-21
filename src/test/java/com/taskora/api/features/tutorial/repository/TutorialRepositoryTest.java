@@ -82,7 +82,7 @@ class TutorialRepositoryTest {
                 tutorialRepository.existsById(savedTutorial.getId())
         );
     }
-    
+
     @Test
     void shouldDeleteTutorialAndItsSteps() {
         Tutorial tutorial = new Tutorial();
@@ -95,7 +95,7 @@ class TutorialRepositoryTest {
         step.setStepNumber(1);
         step.setInstruction("First step.");
 
-        tutorial.getTutorialStep().add(step);
+        tutorial.getTutorialSteps().add(step);
 
         Tutorial savedTutorial = tutorialRepository.save(tutorial);
         Long tutorialId = savedTutorial.getId();
