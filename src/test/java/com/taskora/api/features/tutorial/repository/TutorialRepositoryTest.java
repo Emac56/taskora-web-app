@@ -11,8 +11,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 
 import com.taskora.api.features.tutorial.entity.Tutorial;
-import com.taskora.api.features.tutorial.enums.TutorialStatus;
 import com.taskora.api.features.tutorial.entity.TutorialStep;
+import com.taskora.api.features.tutorial.enums.TutorialStatus;
 
 @DataJpaTest
 class TutorialRepositoryTest {
@@ -85,24 +85,24 @@ class TutorialRepositoryTest {
     
     @Test
     void shouldDeleteTutorialAndItsSteps() {
-    Tutorial tutorial = new Tutorial();
-    tutorial.setTitle("Tutorial With Steps");
-    tutorial.setDescription("Has steps that must cascade delete.");
-    tutorial.setStatus(TutorialStatus.DRAFT);
+        Tutorial tutorial = new Tutorial();
+        tutorial.setTitle("Tutorial With Steps");
+        tutorial.setDescription("Has steps that must cascade delete.");
+        tutorial.setStatus(TutorialStatus.DRAFT);
 
-    TutorialStep step = new TutorialStep();
-    step.setTutorial(tutorial);
-    step.setStepNumber(1);
-    step.setInstruction("First step.");
+        TutorialStep step = new TutorialStep();
+        step.setTutorial(tutorial);
+        step.setStepNumber(1);
+        step.setInstruction("First step.");
 
-    tutorial.getTutorialStep().add(step);
+        tutorial.getTutorialStep().add(step);
 
-    Tutorial savedTutorial = tutorialRepository.save(tutorial);
-    Long tutorialId = savedTutorial.getId();
+        Tutorial savedTutorial = tutorialRepository.save(tutorial);
+        Long tutorialId = savedTutorial.getId();
 
-    tutorialRepository.deleteById(tutorialId);
+        tutorialRepository.deleteById(tutorialId);
 
-    assertFalse(tutorialRepository.existsById(tutorialId));
-    assertTrue(tutorialStepRepository.findAllByTutorialId(tutorialId).isEmpty());
-}
+        assertFalse(tutorialRepository.existsById(tutorialId));
+        assertTrue(tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(tutorialId).isEmpty());
+    }
 }

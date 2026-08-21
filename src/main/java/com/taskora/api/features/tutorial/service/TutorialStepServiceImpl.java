@@ -83,7 +83,8 @@ public class TutorialStepServiceImpl implements TutorialStepService {
             throw new ResourceNotFoundException("Tutorial not found.");
         }
 
-        return tutorialStepRepository.findAllByTutorialId(tutorialId)
+        // Fetch steps ordered in ascending sequence from database
+        return tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(tutorialId)
                 .stream()
                 .map(tutorialStepMapper::toResponse)
                 .toList();
