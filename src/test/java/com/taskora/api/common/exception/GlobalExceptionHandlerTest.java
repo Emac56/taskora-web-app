@@ -98,6 +98,22 @@ class GlobalExceptionHandlerTest {
         assertEquals("Failed to upload image to storage.", response.getBody().getMessage());
     }
 
+    // NEW: covers handleDuplicateStepNumber, previously untested (SonarCloud
+    // flagged lines 96-106 in GlobalExceptionHandler.java as uncovered).
+    @Test
+    void shouldHandleDuplicateStepNumberException() {
+        DuplicateStepNumberException exception =
+                new DuplicateStepNumberException("Step number 1 already exists for this tutorial.");
+
+        ResponseEntity<ApiErrorResponse> response = handler.handleDuplicateStepNumber(exception);
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals(false, response.getBody().isSuccess());
+        assertEquals(
+                "Step number 1 already exists for this tutorial.",
+                response.getBody().getMessage());
+    }
+
     @Test
     void shouldHandleMethodArgumentNotValidException() {
         FieldError fieldError = new FieldError("loginRequest", "email", "Invalid email format.");

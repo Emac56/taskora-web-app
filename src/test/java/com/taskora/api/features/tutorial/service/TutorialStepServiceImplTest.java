@@ -2,6 +2,7 @@ package com.taskora.api.features.tutorial.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -11,10 +12,12 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.taskora.api.common.exception.DuplicateStepNumberException;
 import com.taskora.api.common.exception.ResourceNotFoundException;
 import com.taskora.api.common.security.CurrentUserProvider;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialStepRequest;
@@ -85,6 +88,9 @@ class TutorialStepServiceImplTest {
         when(tutorialRepository.findById(1L))
                 .thenReturn(Optional.of(tutorial));
 
+        when(tutorialStepRepository.existsByTutorialIdAndStepNumber(1L, 1))
+                .thenReturn(false);
+
         when(tutorialStepMapper.toEntity(createRequest))
                 .thenReturn(tutorialStep);
 
@@ -100,6 +106,7 @@ class TutorialStepServiceImplTest {
         assertEquals(response, result);
 
         verify(tutorialRepository).findById(1L);
+        verify(tutorialStepRepository).existsByTutorialIdAndStepNumber(1L, 1);
         verify(tutorialStepMapper).toEntity(createRequest);
         verify(tutorialStepRepository).save(tutorialStep);
         verify(tutorialStepMapper).toResponse(tutorialStep);
@@ -117,6 +124,74 @@ class TutorialStepServiceImplTest {
 
         verify(tutorialRepository).findById(1L);
     }
+
+    // ---------- NEW: duplicate stepNumber guard (BE bug fix) ----------
+
+    @Test
+    void shouldThrowDuplicateStepNumberExceptionWhenCreatingWithExistingStepNumber() {
+        when(tutorialRepository.findById(1L))
+                .thenReturn(Optional.of(tutorial));
+
+        when(tutorialStepRepository.existsByTutorialIdAndStepNumber(1L, 1))
+                .thenReturn(true);
+
+        assertThrows(
+                DuplicateStepNumberException.class,
+                () -> tutorialStepService.create(1L, createRequest)
+        );
+
+        verify(tutorialRepository).findById(1L);
+        verify(tutorialStepRepository).existsByTutorialIdAndStepNumber(1L, 1);
+        // Must never reach save() once a duplicate is detected.
+        verify(tutorialStepRepository, never()).save(ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldThrowDuplicateStepNumberExceptionWhenUpdatingToExistingStepNumber() {
+        when(tutorialStepRepository.findById(10L))
+                .thenReturn(Optional.of(tutorialStep));
+
+        when(tutorialStepRepository.existsByTutorialIdAndStepNumberAndIdNot(1L, 2, 10L))
+                .thenReturn(true);
+
+        assertThrows(
+                DuplicateStepNumberException.class,
+                () -> tutorialStepService.update(10L, updateRequest)
+        );
+
+        verify(tutorialStepRepository).findById(10L);
+        verify(tutorialStepRepository)
+                .existsByTutorialIdAndStepNumberAndIdNot(1L, 2, 10L);
+        verify(tutorialStepRepository, never()).save(ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldAllowUpdateWhenStepNumberUnchanged() {
+        // Keeping the same stepNumber must not collide with itself.
+        UpdateTutorialStepRequest sameNumberRequest = new UpdateTutorialStepRequest();
+        sameNumberRequest.setStepNumber(1);
+        sameNumberRequest.setInstruction("Updated instruction.");
+
+        when(tutorialStepRepository.findById(10L))
+                .thenReturn(Optional.of(tutorialStep));
+
+        when(tutorialStepRepository.existsByTutorialIdAndStepNumberAndIdNot(1L, 1, 10L))
+                .thenReturn(false);
+
+        when(tutorialStepRepository.save(tutorialStep))
+                .thenReturn(tutorialStep);
+
+        when(tutorialStepMapper.toResponse(tutorialStep))
+                .thenReturn(response);
+
+        TutorialStepResponse result =
+                tutorialStepService.update(10L, sameNumberRequest);
+
+        assertEquals(response, result);
+        verify(tutorialStepRepository).save(tutorialStep);
+    }
+
+    // --------------------------------------------------------------------
 
     @Test
     void shouldGetTutorialStepById() {
@@ -211,6 +286,9 @@ class TutorialStepServiceImplTest {
         when(tutorialStepRepository.findById(10L))
                 .thenReturn(Optional.of(tutorialStep));
 
+        when(tutorialStepRepository.existsByTutorialIdAndStepNumberAndIdNot(1L, 2, 10L))
+                .thenReturn(false);
+
         when(tutorialStepRepository.save(tutorialStep))
                 .thenReturn(tutorialStep);
 
@@ -223,6 +301,8 @@ class TutorialStepServiceImplTest {
         assertEquals(response, result);
 
         verify(tutorialStepRepository).findById(10L);
+        verify(tutorialStepRepository)
+                .existsByTutorialIdAndStepNumberAndIdNot(1L, 2, 10L);
         verify(tutorialStepMapper)
                 .updateEntity(updateRequest, tutorialStep);
         verify(tutorialStepRepository).save(tutorialStep);

@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.taskora.api.common.exception.DuplicateStepNumberException;
 import com.taskora.api.common.exception.ResourceNotFoundException;
 import com.taskora.api.common.security.CurrentUserProvider;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialStepRequest;
@@ -45,6 +46,15 @@ public class TutorialStepServiceImpl implements TutorialStepService {
         Tutorial tutorial = tutorialRepository.findById(tutorialId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException("Tutorial not found."));
+
+        // BE bug fix: reject duplicate stepNumber within the same tutorial
+        // before it ever reaches the database.
+        if (tutorialStepRepository.existsByTutorialIdAndStepNumber(
+                tutorialId, request.getStepNumber())) {
+            throw new DuplicateStepNumberException(
+                    "Step number " + request.getStepNumber()
+                            + " already exists for this tutorial.");
+        }
 
         TutorialStep tutorialStep = tutorialStepMapper.toEntity(request);
         tutorialStep.setTutorial(tutorial);
@@ -99,6 +109,17 @@ public class TutorialStepServiceImpl implements TutorialStepService {
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
                                 "Tutorial step not found."));
+
+        // BE bug fix: reject duplicate stepNumber within the same tutorial,
+        // excluding this step itself (so keeping the same number is fine).
+        Long tutorialId = tutorialStep.getTutorial().getId();
+
+        if (tutorialStepRepository.existsByTutorialIdAndStepNumberAndIdNot(
+                tutorialId, request.getStepNumber(), id)) {
+            throw new DuplicateStepNumberException(
+                    "Step number " + request.getStepNumber()
+                            + " already exists for this tutorial.");
+        }
 
         tutorialStepMapper.updateEntity(request, tutorialStep);
 
