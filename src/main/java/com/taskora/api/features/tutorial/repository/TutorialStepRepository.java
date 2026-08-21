@@ -9,5 +9,6 @@ import com.taskora.api.features.tutorial.entity.TutorialStep;
 public interface TutorialStepRepository
         extends JpaRepository<TutorialStep, Long> {
 
-    List<TutorialStep> findAllByTutorialId(Long tutorialId);
+    // Automatically derives SQL with "ORDER BY step_number ASC"
+    List<TutorialStep> findAllByTutorialIdOrderByStepNumberAsc(Long tutorialId);
 }
