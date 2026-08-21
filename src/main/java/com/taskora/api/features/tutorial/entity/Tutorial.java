@@ -3,7 +3,7 @@ package com.taskora.api.features.tutorial.entity;
 import com.taskora.api.common.entity.BaseEntity;
 import com.taskora.api.features.tutorial.enums.TutorialStatus;
 
-import jakarta.persistence.CascadeType;   // ← bagong import
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.OneToMany;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,5 +34,5 @@ public class Tutorial extends BaseEntity {
         cascade = CascadeType.ALL,
         orphanRemoval = true
     )
-    private List<TutorialStep> tutorialStep = new ArrayList<>();
+    private List<TutorialStep> tutorialSteps = new ArrayList<>();
 }
