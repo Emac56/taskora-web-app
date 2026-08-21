@@ -93,6 +93,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(response);
     }
 
+    // NEW: handles duplicate stepNumber within the same tutorial (BE bug fix).
+    @ExceptionHandler(DuplicateStepNumberException.class)
+    public ResponseEntity<ApiErrorResponse> handleDuplicateStepNumber(
+            DuplicateStepNumberException exception) {
+
+        ApiErrorResponse response = new ApiErrorResponse();
+        response.setSuccess(false);
+        response.setMessage(exception.getMessage());
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleValidation(
             MethodArgumentNotValidException exception) {
