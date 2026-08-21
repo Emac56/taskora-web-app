@@ -173,7 +173,7 @@ class TutorialStepServiceImplTest {
         when(tutorialRepository.findById(1L))
                 .thenReturn(Optional.of(tutorial));
 
-        when(tutorialStepRepository.findAllByTutorialId(1L))
+        when(tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(1L))
                 .thenReturn(List.of(tutorialStep));
 
         when(tutorialStepMapper.toResponse(tutorialStep))
@@ -186,7 +186,7 @@ class TutorialStepServiceImplTest {
         assertEquals(response, result.get(0));
 
         verify(tutorialRepository).findById(1L);
-        verify(tutorialStepRepository).findAllByTutorialId(1L);
+        verify(tutorialStepRepository).findAllByTutorialIdOrderByStepNumberAsc(1L);
         verify(tutorialStepMapper).toResponse(tutorialStep);
     }
 
@@ -265,40 +265,40 @@ class TutorialStepServiceImplTest {
 
         verify(tutorialStepRepository).existsById(10L);
     }
-    
+
     @Test
     void shouldThrowExceptionWhenTutorialNotFoundForGetAllByTutorialId() {
-    when(tutorialRepository.findById(1L))
-            .thenReturn(Optional.empty());
+        when(tutorialRepository.findById(1L))
+                .thenReturn(Optional.empty());
 
-    assertThrows(
-            ResourceNotFoundException.class,
-            () -> tutorialStepService.getAllByTutorialId(1L)
-    );
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> tutorialStepService.getAllByTutorialId(1L)
+        );
 
-    verify(tutorialRepository).findById(1L);
-}
+        verify(tutorialRepository).findById(1L);
+    }
 
-@Test
-void shouldReturnTutorialStepWhenCallerIsAdminAndTutorialIsDraft() {
-    Tutorial draftTutorial = new Tutorial();
-    draftTutorial.setId(1L);
-    draftTutorial.setStatus(TutorialStatus.DRAFT);
+    @Test
+    void shouldReturnTutorialStepWhenCallerIsAdminAndTutorialIsDraft() {
+        Tutorial draftTutorial = new Tutorial();
+        draftTutorial.setId(1L);
+        draftTutorial.setStatus(TutorialStatus.DRAFT);
 
-    TutorialStep draftStep = new TutorialStep();
-    draftStep.setId(10L);
-    draftStep.setTutorial(draftTutorial);
+        TutorialStep draftStep = new TutorialStep();
+        draftStep.setId(10L);
+        draftStep.setTutorial(draftTutorial);
 
-    when(tutorialStepRepository.findById(10L))
-            .thenReturn(Optional.of(draftStep));
-    when(currentUserProvider.isAdmin()).thenReturn(true);
-    when(tutorialStepMapper.toResponse(draftStep))
-            .thenReturn(response);
+        when(tutorialStepRepository.findById(10L))
+                .thenReturn(Optional.of(draftStep));
+        when(currentUserProvider.isAdmin()).thenReturn(true);
+        when(tutorialStepMapper.toResponse(draftStep))
+                .thenReturn(response);
 
-    TutorialStepResponse result = tutorialStepService.getById(10L);
+        TutorialStepResponse result = tutorialStepService.getById(10L);
 
-    assertEquals(response, result);
+        assertEquals(response, result);
 
-    verify(currentUserProvider).isAdmin();
-}
+        verify(currentUserProvider).isAdmin();
+    }
 }
