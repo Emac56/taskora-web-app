@@ -3,9 +3,12 @@ name: SonarQube Analysis
 on:
   push:
     branches:
-      - main
-
+      - master
+    paths:
+      - 'backend/**'
   pull_request:
+    paths:
+      - 'backend/**'
 
 jobs:
   sonar:
@@ -17,7 +20,7 @@ jobs:
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      
+
     permissions:
       contents: read
       pull-requests: read
@@ -34,12 +37,15 @@ jobs:
           distribution: temurin
           java-version: 21
           cache: maven
+          cache-dependency-path: backend/pom.xml
 
       - name: Build Project
+        working-directory: backend
         run: mvn clean verify
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v7
+        with:
+          projectBaseDir: backend
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
