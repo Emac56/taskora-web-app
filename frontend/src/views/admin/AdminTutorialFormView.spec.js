@@ -36,9 +36,9 @@ beforeEach(() => {
 })
 
 describe('AdminTutorialFormView - create mode happy path', () => {
-  it('creates the tutorial then its step, and navigates away', async () => {
+  it('creates the tutorial then replaces its steps in one call, and navigates away', async () => {
     tutorialsApi.createTutorial.mockResolvedValue({ id: 99 })
-    stepsApi.createStep.mockResolvedValue({ id: 501 })
+    stepsApi.replaceSteps.mockResolvedValue([{ id: 501, stepNumber: 1 }])
 
     const wrapper = mountForm()
 
@@ -58,11 +58,10 @@ describe('AdminTutorialFormView - create mode happy path', () => {
       status: 'DRAFT'
     })
 
-    expect(stepsApi.createStep).toHaveBeenCalledWith(99, {
-      stepNumber: 1,
-      instruction: 'Do the first thing',
-      imageUrl: null
-    })
+    expect(stepsApi.replaceSteps).toHaveBeenCalledTimes(1)
+    expect(stepsApi.replaceSteps).toHaveBeenCalledWith(99, [
+      { id: null, stepNumber: 1, instruction: 'Do the first thing', imageUrl: null }
+    ])
 
     expect(push).toHaveBeenCalledWith({
       name: 'admin-tutorials-list'
@@ -76,10 +75,8 @@ describe('AdminTutorialFormView - FE-029 zero-step submission', () => {
 
     await flushPromises()
 
-    // Sanity check: create mode starts with exactly one blank step.
     expect(removeButtons(wrapper)).toHaveLength(1)
 
-    // Reproduce the reachable path from the report: remove the last step.
     await removeButtons(wrapper)[0].trigger('click')
 
     expect(wrapper.text()).toContain('No steps yet. Add at least one step below.')
@@ -96,20 +93,18 @@ describe('AdminTutorialFormView - FE-029 zero-step submission', () => {
 
   it('still allows saving once a step is added back after being cleared to zero', async () => {
     tutorialsApi.createTutorial.mockResolvedValue({ id: 99 })
-    stepsApi.createStep.mockResolvedValue({ id: 501 })
+    stepsApi.replaceSteps.mockResolvedValue([{ id: 501, stepNumber: 1 }])
 
     const wrapper = mountForm()
 
     await flushPromises()
 
-    // Drop to zero steps first, confirming the guard blocks it.
     await removeButtons(wrapper)[0].trigger('click')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
     expect(tutorialsApi.createTutorial).not.toHaveBeenCalled()
 
-    // Add a step back via the "+ Add Step" button, then fill it in and save.
     const addStepButton = wrapper
       .findAll('button')
       .find((b) => b.text() === '+ Add Step')
@@ -131,26 +126,11 @@ describe('AdminTutorialFormView - FE-029 zero-step submission', () => {
   })
 })
 
-describe('AdminTutorialFormView - save flow risk from FE-002', () => {
+describe('AdminTutorialFormView - atomic save (replaces old per-request FE-002/FE-028 tests)', () => {
   const existingSteps = [
-    {
-      id: 10,
-      stepNumber: 1,
-      instruction: 'Step A',
-      imageUrl: null
-    },
-    {
-      id: 11,
-      stepNumber: 2,
-      instruction: 'Step B',
-      imageUrl: null
-    },
-    {
-      id: 12,
-      stepNumber: 3,
-      instruction: 'Step C',
-      imageUrl: null
-    }
+    { id: 10, stepNumber: 1, instruction: 'Step A', imageUrl: null },
+    { id: 11, stepNumber: 2, instruction: 'Step B', imageUrl: null },
+    { id: 12, stepNumber: 3, instruction: 'Step C', imageUrl: null }
   ]
 
   function setUpEditMode() {
@@ -160,149 +140,80 @@ describe('AdminTutorialFormView - save flow risk from FE-002', () => {
       description: 'Existing desc',
       status: 'DRAFT'
     })
-
     stepsApi.getStepsByTutorialId.mockResolvedValue(existingSteps)
-
-    tutorialsApi.updateTutorial.mockResolvedValue({
-      id: 5
-    })
-
-    stepsApi.updateStep.mockResolvedValue({})
+    tutorialsApi.updateTutorial.mockResolvedValue({ id: 5 })
   }
 
-  it('treats a 404 on delete as "already gone" and still saves the rest', async () => {
+  it('sends exactly one replaceSteps call for a 3-step tutorial (regression: used to be up to 6 sequential requests)', async () => {
     setUpEditMode()
-
-    stepsApi.deleteStep.mockRejectedValueOnce({
-      response: {
-        status: 404
-      }
-    })
+    stepsApi.replaceSteps.mockResolvedValue(existingSteps)
 
     const wrapper = mountForm({ id: 5 })
-
     await flushPromises()
-
-    await removeButtons(wrapper)[0].trigger('click')
 
     await wrapper.find('form').trigger('submit')
-
     await flushPromises()
 
-    expect(stepsApi.deleteStep).toHaveBeenCalledWith(10)
-
-    expect(wrapper.text()).not.toContain(
-      'Could not save this tutorial.'
-    )
-
-    expect(push).toHaveBeenCalledWith({
-      name: 'admin-tutorials-list'
-    })
-  })
-
-  it('does not re-delete a step that already succeeded when the user retries after a partial failure', async () => {
-    setUpEditMode()
-
-    let attempt = 1
-
-    stepsApi.deleteStep.mockImplementation((id) => {
-      if (id === 10) {
-        return Promise.resolve()
-      }
-
-      if (id === 11) {
-        return attempt === 1
-          ? Promise.reject({
-              response: {
-                status: 500
-              }
-            })
-          : Promise.resolve()
-      }
-    })
-
-    const wrapper = mountForm({ id: 5 })
-
-    await flushPromises()
-
-    await removeButtons(wrapper)[0].trigger('click')
-
-    await removeButtons(wrapper)[0].trigger('click')
-
-    await wrapper.find('form').trigger('submit')
-
-    await flushPromises()
-
-    expect(stepsApi.deleteStep).toHaveBeenCalledWith(10)
-    expect(stepsApi.deleteStep).toHaveBeenCalledWith(11)
-
+    expect(stepsApi.replaceSteps).toHaveBeenCalledTimes(1)
+    expect(stepsApi.deleteStep).not.toHaveBeenCalled()
     expect(stepsApi.updateStep).not.toHaveBeenCalled()
+    expect(stepsApi.createStep).not.toHaveBeenCalled()
 
-    expect(wrapper.text()).toContain(
-      'Could not save this tutorial.'
-    )
-
-    stepsApi.deleteStep.mockClear()
-
-    attempt = 2
-
-    await wrapper.find('form').trigger('submit')
-
-    await flushPromises()
-
-    expect(stepsApi.deleteStep).toHaveBeenCalledTimes(1)
-
-    expect(stepsApi.deleteStep).toHaveBeenCalledWith(11)
-
-    expect(stepsApi.updateStep).toHaveBeenCalledWith(12, {
-      stepNumber: 1,
-      instruction: 'Step C',
-      imageUrl: null
-    })
-
-    expect(push).toHaveBeenCalledWith({
-      name: 'admin-tutorials-list'
-    })
+    expect(push).toHaveBeenCalledWith({ name: 'admin-tutorials-list' })
   })
 
-  it('saves reordered steps without a false 409 conflict (FE-028)', async () => {
+  it('omits a removed step from the payload instead of issuing a separate delete call', async () => {
     setUpEditMode()
-
-    // Mock backend enforcing the real unique (tutorial_id, step_number) constraint.
-    const liveNumbers = new Map([
-      [10, 1],
-      [11, 2],
-      [12, 3]
-    ])
-    stepsApi.updateStep.mockImplementation((id, { stepNumber }) => {
-      for (const [otherId, otherNumber] of liveNumbers) {
-        if (otherId !== id && otherNumber === stepNumber) {
-          return Promise.reject({ response: { status: 409 } })
-        }
-      }
-      liveNumbers.set(id, stepNumber)
-      return Promise.resolve({})
-    })
+    stepsApi.replaceSteps.mockResolvedValue(existingSteps.slice(1))
 
     const wrapper = mountForm({ id: 5 })
-
     await flushPromises()
 
-    // Swap step A (id 10) and step B (id 11) via move-down on the first row.
-    await wrapper.find('[aria-label="Move step down"]').trigger('click')
-
+    await removeButtons(wrapper)[0].trigger('click')
     await wrapper.find('form').trigger('submit')
-
     await flushPromises()
+
+    expect(stepsApi.replaceSteps).toHaveBeenCalledWith(5, [
+      { id: 11, stepNumber: 1, instruction: 'Step B', imageUrl: null },
+      { id: 12, stepNumber: 2, instruction: 'Step C', imageUrl: null }
+    ])
+    expect(stepsApi.deleteStep).not.toHaveBeenCalled()
+  })
+
+  it('reorders steps in a single call without a false 409 conflict (regression for "conflicts with existing data")', async () => {
+    setUpEditMode()
+    stepsApi.replaceSteps.mockResolvedValue(existingSteps)
+
+    const wrapper = mountForm({ id: 5 })
+    await flushPromises()
+
+    await wrapper.find('[aria-label="Move step down"]').trigger('click')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(stepsApi.replaceSteps).toHaveBeenCalledWith(5, [
+      { id: 11, stepNumber: 1, instruction: 'Step B', imageUrl: null },
+      { id: 10, stepNumber: 2, instruction: 'Step A', imageUrl: null },
+      { id: 12, stepNumber: 3, instruction: 'Step C', imageUrl: null }
+    ])
 
     expect(wrapper.text()).not.toContain('Could not save this tutorial.')
-    expect(push).toHaveBeenCalledWith({
-      name: 'admin-tutorials-list'
+    expect(push).toHaveBeenCalledWith({ name: 'admin-tutorials-list' })
+  })
+
+  it('shows a clear error and does not navigate away when replaceSteps fails', async () => {
+    setUpEditMode()
+    stepsApi.replaceSteps.mockRejectedValue({
+      message: 'This operation conflicts with existing data.'
     })
 
-    // Final state: B=1, A=2, C=3.
-    expect(liveNumbers.get(11)).toBe(1)
-    expect(liveNumbers.get(10)).toBe(2)
-    expect(liveNumbers.get(12)).toBe(3)
+    const wrapper = mountForm({ id: 5 })
+    await flushPromises()
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('This operation conflicts with existing data.')
+    expect(push).not.toHaveBeenCalled()
   })
 })
