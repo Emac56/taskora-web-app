@@ -2,6 +2,7 @@ package com.taskora.api.common.exception;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -101,6 +102,26 @@ public class GlobalExceptionHandler {
         ApiErrorResponse response = new ApiErrorResponse();
         response.setSuccess(false);
         response.setMessage(exception.getMessage());
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    // NEW: backstop for DB-level constraint violations that slip past the
+    // service-layer check-then-save logic (e.g. two near-simultaneous
+    // requests both pass the exists() check before either save() commits).
+    // The unique constraint in the DB is the real backstop by design — this
+    // just makes sure a genuine conflict surfaces as 409, not a raw 500.
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiErrorResponse> handleDataIntegrityViolation(
+            DataIntegrityViolationException exception) {
+
+        // warn, not error: this represents a client-triggerable conflict
+        // (duplicate/constraint clash), not an unexpected server bug.
+        log.warn("Data integrity violation", exception);
+
+        ApiErrorResponse response = new ApiErrorResponse();
+        response.setSuccess(false);
+        response.setMessage("This operation conflicts with existing data.");
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
     }
