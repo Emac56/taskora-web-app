@@ -11,15 +11,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
- * Forces the CsrfToken to be rendered on every request, which is what
- * actually triggers CookieCsrfTokenRepository to write the XSRF-TOKEN
- * cookie to the response.
+ * Forces the CsrfToken to be resolved on every request and writes it to both
+ * the XSRF-TOKEN cookie (via CookieCsrfTokenRepository) and the X-XSRF-TOKEN
+ * response header.
  *
- * Without this filter, Spring Security only writes the cookie lazily
- * the first time something reads csrfToken.getToken() — which means an
- * SPA hitting the API for the first time (e.g. on page load) may not
- * receive the cookie until a second request. That breaks the
- * "read cookie in JS, send as header" flow the frontend depends on.
+ * Exposing the token as an HTTP response header allows cross-origin SPAs
+ * (such as frontend on Vercel, backend on Render) to read the token value
+ * without violating the browser Same-Origin Policy on cookies.
  */
 public class CsrfCookieFilter extends OncePerRequestFilter {
 
@@ -28,11 +26,17 @@ public class CsrfCookieFilter extends OncePerRequestFilter {
             HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        CsrfToken csrfToken = (CsrfToken) request.getAttribute("_csrf");
+        CsrfToken csrfToken = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
+        if (csrfToken == null) {
+            csrfToken = (CsrfToken) request.getAttribute("_csrf");
+        }
+
         if (csrfToken != null) {
-            // Accessing .getToken() is what forces the deferred token
-            // to actually resolve and get saved to the cookie.
-            csrfToken.getToken();
+            // Accessing .getToken() forces deferred token resolution
+            String token = csrfToken.getToken();
+            if (csrfToken.getHeaderName() != null && token != null) {
+                response.setHeader(csrfToken.getHeaderName(), token);
+            }
         }
 
         filterChain.doFilter(request, response);
