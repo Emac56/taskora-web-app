@@ -2,6 +2,7 @@ package com.taskora.api.features.tutorial.entity;
 
 import com.taskora.api.common.entity.BaseEntity;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
@@ -28,8 +29,10 @@ public class TutorialStep extends BaseEntity {
 
     private Integer stepNumber;
 
+    @Column(length = 5000)
     private String instruction;
 
+    @Column(length = 2048)
     private String imageUrl;
 
 }
