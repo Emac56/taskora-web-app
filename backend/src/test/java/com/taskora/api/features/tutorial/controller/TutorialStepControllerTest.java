@@ -208,4 +208,32 @@ class TutorialStepControllerTest {
         )
         .andExpect(status().isBadRequest());
     }
+
+    @Test
+    void shouldReturnBadRequestWhenCreatingTutorialStepWithZeroStepNumber() throws Exception {
+        CreateTutorialStepRequest request = new CreateTutorialStepRequest();
+        request.setStepNumber(0);
+        request.setInstruction("Open the project.");
+
+        mockMvc.perform(
+                post("/api/v1/tutorials/1/steps")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenUpdatingTutorialStepWithNegativeStepNumber() throws Exception {
+        UpdateTutorialStepRequest request = new UpdateTutorialStepRequest();
+        request.setStepNumber(-1);
+        request.setInstruction("Open the project.");
+
+        mockMvc.perform(
+                put("/api/v1/tutorial-steps/10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isBadRequest());
+    }
 }
