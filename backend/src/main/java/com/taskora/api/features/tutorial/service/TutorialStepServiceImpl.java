@@ -17,7 +17,7 @@ import com.taskora.api.common.exception.ResourceNotFoundException;
 import com.taskora.api.common.security.CurrentUserProvider;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialStepRequest;
 import com.taskora.api.features.tutorial.dto.request.ReplaceTutorialStepItem;
-import com.taskora.api.features.tutorial.dto.request.ReplaceTutorialStepsRequest;
+import com.taskora.api.features.tutorial.dto.request.ReplaceTutorialStepRequest;
 import com.taskora.api.features.tutorial.dto.request.UpdateTutorialStepRequest;
 import com.taskora.api.features.tutorial.dto.response.TutorialStepResponse;
 import com.taskora.api.features.tutorial.entity.Tutorial;
