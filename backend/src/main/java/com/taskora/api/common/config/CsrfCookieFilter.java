@@ -32,17 +32,7 @@ public class CsrfCookieFilter extends OncePerRequestFilter {
         if (csrfToken != null) {
             // Accessing .getToken() is what forces the deferred token
             // to actually resolve and get saved to the cookie.
-            String token = csrfToken.getToken();
-
-            // The frontend (Vercel) can't read the XSRF-TOKEN cookie via
-            // document.cookie — it's scoped to this backend's own domain
-            // (Render), a different registrable domain. Mirroring the
-            // same value onto a response header lets the frontend
-            // capture it from the response instead (see http.js). CORS
-            // must explicitly expose this header
-            // (see SecurityConfig#corsConfigurationSource) or
-            // cross-origin JS still won't be able to read it.
-            response.setHeader("X-XSRF-TOKEN", token);
+            csrfToken.getToken();
         }
 
         filterChain.doFilter(request, response);
