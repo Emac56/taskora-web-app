@@ -16,7 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.taskora.api.common.storage.SupabaseStorageClient;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialStepRequest;
-import com.taskora.api.features.tutorial.dto.request.ReplaceTutorialStepsRequest;
+import com.taskora.api.features.tutorial.dto.request.ReplaceTutorialStepRequest;
 import com.taskora.api.features.tutorial.dto.request.UpdateTutorialStepRequest;
 import com.taskora.api.features.tutorial.dto.response.ImageUploadResponse;
 import com.taskora.api.features.tutorial.dto.response.TutorialStepResponse;
@@ -94,7 +94,7 @@ public class TutorialStepController {
     @PutMapping("/tutorials/{tutorialId}/steps")
     public ResponseEntity<List<TutorialStepResponse>> replaceAll(
             @PathVariable Long tutorialId,
-            @Valid @RequestBody ReplaceTutorialStepsRequest request) {
+            @Valid @RequestBody ReplaceTutorialStepRequest request) {
 
         List<TutorialStepResponse> response =
                 tutorialStepService.replaceAll(tutorialId, request);
