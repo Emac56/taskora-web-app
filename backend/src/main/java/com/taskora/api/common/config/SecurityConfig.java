@@ -94,10 +94,10 @@ public class SecurityConfig {
                             "/api/v1/tutorial-steps/**")
                         .permitAll()
                     .requestMatchers(HttpMethod.POST,
-        "/api/v1/tutorials",
-        "/api/v1/tutorials/*/steps",
-        "/api/v1/tutorial-steps/images")
-    .hasRole(ROLE_ADMIN)
+                            "/api/v1/tutorials",
+                            "/api/v1/tutorials/*/steps",
+                            "/api/v1/tutorial-steps/images")
+                        .hasRole(ROLE_ADMIN)
                     .requestMatchers(HttpMethod.PUT,
                             "/api/v1/tutorials/*",
                             "/api/v1/tutorial-steps/*")
@@ -106,22 +106,23 @@ public class SecurityConfig {
                             "/api/v1/tutorials/*",
                             "/api/v1/tutorial-steps/*")
                         .hasRole(ROLE_ADMIN)
+                    .requestMatchers(HttpMethod.GET,
+                            "/monitor.html",
+                            "/actuator/**")
+                        .hasRole(ROLE_ADMIN)
                     .anyRequest().authenticated())
             .exceptionHandling(exception -> exception
+                    .authenticationEntryPoint((request, response, authException) -> {
+                        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                        response.setContentType("application/json");
 
+                        ApiErrorResponse errorResponse = new ApiErrorResponse();
+                        errorResponse.setSuccess(false);
+                        errorResponse.setMessage("Authentication required.");
 
-.authenticationEntryPoint((request, response, authException) -> {
-    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-    response.setContentType("application/json");
-
-    ApiErrorResponse errorResponse = new ApiErrorResponse();
-    errorResponse.setSuccess(false);
-    errorResponse.setMessage("Authentication required.");
-
-    new ObjectMapper().writeValue(response.getWriter(), errorResponse);
-}))
+                        new ObjectMapper().writeValue(response.getWriter(), errorResponse);
+                    }))
             .formLogin(AbstractHttpConfigurer::disable)
-
             .logout(logout -> logout
                     .logoutUrl("/api/v1/users/logout")
                     .invalidateHttpSession(true)
