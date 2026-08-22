@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -111,6 +112,22 @@ class GlobalExceptionHandlerTest {
         assertEquals(false, response.getBody().isSuccess());
         assertEquals(
                 "Step number 1 already exists for this tutorial.",
+                response.getBody().getMessage());
+    }
+
+    // NEW: covers handleDataIntegrityViolation, the fix for DB-level
+    // constraint violations surfacing as 500 instead of 409.
+    @Test
+    void shouldHandleDataIntegrityViolationException() {
+        DataIntegrityViolationException exception =
+                new DataIntegrityViolationException("duplicate key value violates unique constraint");
+
+        ResponseEntity<ApiErrorResponse> response = handler.handleDataIntegrityViolation(exception);
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals(false, response.getBody().isSuccess());
+        assertEquals(
+                "This operation conflicts with existing data.",
                 response.getBody().getMessage());
     }
 
