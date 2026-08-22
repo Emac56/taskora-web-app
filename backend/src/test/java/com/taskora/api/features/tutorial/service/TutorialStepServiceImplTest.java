@@ -12,6 +12,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -314,6 +315,53 @@ void shouldReorderTwoExistingStepsWithoutConflict() {
 
     verify(tutorialStepRepository).saveAllAndFlush(ArgumentMatchers.anyList());
     verify(tutorialStepRepository, never()).deleteAllByIdInBatch(ArgumentMatchers.anyList());
+}
+
+@Test
+void shouldCreateNewStepWhenPayloadItemHasNoId() {
+    // One existing step is kept as-is; the second payload item has no id,
+    // so it must go through the "create new step" branch (item.getId() ==
+    // null -> new TutorialStep() + setTutorial(tutorial)) — the exact
+    // branch SonarCloud flagged as uncovered.
+    TutorialStep stepA = new TutorialStep();
+    stepA.setId(10L); stepA.setTutorial(tutorial); stepA.setStepNumber(1);
+
+    when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
+    when(tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(1L))
+            .thenReturn(List.of(stepA));
+    when(tutorialStepRepository.saveAllAndFlush(ArgumentMatchers.anyList()))
+            .thenAnswer(inv -> inv.getArgument(0));
+    when(tutorialStepRepository.saveAll(ArgumentMatchers.anyList()))
+            .thenAnswer(inv -> inv.getArgument(0));
+    when(tutorialStepMapper.toResponse(ArgumentMatchers.any())).thenReturn(response);
+
+    ReplaceTutorialStepItem itemA = new ReplaceTutorialStepItem();
+    itemA.setId(10L); itemA.setStepNumber(1); itemA.setInstruction("A");
+
+    ReplaceTutorialStepItem itemNew = new ReplaceTutorialStepItem();
+    itemNew.setId(null);
+    itemNew.setStepNumber(2);
+    itemNew.setInstruction("New step");
+    itemNew.setImageUrl("https://example.com/new.png");
+
+    ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
+    req.setSteps(List.of(itemA, itemNew));
+
+    tutorialStepService.replaceAll(1L, req);
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<TutorialStep>> captor = ArgumentCaptor.forClass(List.class);
+    verify(tutorialStepRepository).saveAll(captor.capture());
+
+    TutorialStep created = captor.getValue().stream()
+            .filter(step -> step.getId() == null)
+            .findFirst()
+            .orElseThrow();
+
+    assertEquals(tutorial, created.getTutorial());
+    assertEquals(2, created.getStepNumber());
+    assertEquals("New step", created.getInstruction());
+    assertEquals("https://example.com/new.png", created.getImageUrl());
 }
 
 @Test
