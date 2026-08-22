@@ -16,6 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.taskora.api.common.storage.SupabaseStorageClient;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialStepRequest;
+import com.taskora.api.features.tutorial.dto.request.ReplaceTutorialStepsRequest;
 import com.taskora.api.features.tutorial.dto.request.UpdateTutorialStepRequest;
 import com.taskora.api.features.tutorial.dto.response.ImageUploadResponse;
 import com.taskora.api.features.tutorial.dto.response.TutorialStepResponse;
@@ -86,6 +87,19 @@ public class TutorialStepController {
         tutorialStepService.delete(id);
 
         return ResponseEntity.noContent().build();
+    }
+
+    // NEW: atomic bulk replace of a tutorial's steps (create/update/delete/
+    // reorder in one transaction). Replaces the old N-request save flow.
+    @PutMapping("/tutorials/{tutorialId}/steps")
+    public ResponseEntity<List<TutorialStepResponse>> replaceAll(
+            @PathVariable Long tutorialId,
+            @Valid @RequestBody ReplaceTutorialStepsRequest request) {
+
+        List<TutorialStepResponse> response =
+                tutorialStepService.replaceAll(tutorialId, request);
+
+        return ResponseEntity.ok(response);
     }
 
     // Uploads an image to Supabase Storage and returns its public URL.
