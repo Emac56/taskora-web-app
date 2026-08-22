@@ -1,3 +1,11 @@
+import { it, expect, vi } from 'vitest'
+import http from './http'
+import { replaceSteps } from './tutorialSteps.api'
+
+vi.mock('./http', () => ({
+  default: { put: vi.fn() }
+}))
+
 it('replaceSteps puts the full step list with id/stepNumber/instruction/imageUrl', async () => {
   const steps = [
     { id: 10, stepNumber: 2, instruction: 'Step A' },
