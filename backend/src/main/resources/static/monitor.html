@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Taskora Server Monitor</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; padding: 20px; }
+  h1 { font-size: 1.2rem; margin-bottom: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  .card { background: #1e293b; border-radius: 10px; padding: 14px; }
+  .card .label { font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; }
+  .card .value { font-size: 1.4rem; font-weight: 600; margin-top: 4px; }
+  .up { color: #4ade80; } .down { color: #f87171; }
+  #components { margin-top: 20px; }
+  .comp-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #334155; }
+</style>
+</head>
+<body>
+<h1>Taskora — Server Monitor <span id="lastUpdate" style="font-size:0.75rem;color:#64748b;"></span></h1>
+<div class="grid" id="grid"></div>
+<div id="components"></div>
+
+<script>
+async function fetchJson(url) {
+  const res = await fetch(url, { credentials: 'same-origin' });
+  if (!res.ok) throw new Error(url + ' → ' + res.status);
+  return res.json();
+}
+
+function fmtBytes(n) {
+  return (n / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+async function refresh() {
+  try {
+    const [health, memUsed, memMax, uptime, cpu] = await Promise.all([
+      fetchJson('/actuator/health'),
+      fetchJson('/actuator/metrics/jvm.memory.used'),
+      fetchJson('/actuator/metrics/jvm.memory.max'),
+      fetchJson('/actuator/metrics/process.uptime'),
+      fetchJson('/actuator/metrics/system.cpu.usage').catch(() => null)
+    ]);
+
+    const memUsedVal = memUsed.measurements[0].value;
+    const memMaxVal = memMax.measurements[0].value;
+    const uptimeSec = uptime.measurements[0].value;
+    const cpuVal = cpu ? (cpu.measurements[0].value * 100).toFixed(1) + '%' : 'n/a';
+
+    document.getElementById('grid').innerHTML = `
+      <div class="card">
+        <div class="label">Status</div>
+        <div class="value ${health.status === 'UP' ? 'up' : 'down'}">${health.status}</div>
+      </div>
+      <div class="card">
+        <div class="label">Memory Used</div>
+        <div class="value">${fmtBytes(memUsedVal)}</div>
+      </div>
+      <div class="card">
+        <div class="label">Memory Max</div>
+        <div class="value">${memMaxVal > 0 ? fmtBytes(memMaxVal) : '∞'}</div>
+      </div>
+      <div class="card">
+        <div class="label">Uptime</div>
+        <div class="value">${Math.floor(uptimeSec / 60)} min</div>
+      </div>
+      <div class="card">
+        <div class="label">CPU Usage</div>
+        <div class="value">${cpuVal}</div>
+      </div>
+    `;
+
+    const comps = health.components || {};
+    document.getElementById('components').innerHTML =
+      '<h3 style="font-size:0.9rem;color:#94a3b8;">Components</h3>' +
+      Object.entries(comps).map(([name, c]) => `
+        <div class="comp-row">
+          <span>${name}</span>
+          <span class="${c.status === 'UP' ? 'up' : 'down'}">${c.status}</span>
+        </div>
+      `).join('');
+
+    document.getElementById('lastUpdate').textContent =
+      'updated ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    document.getElementById('grid').innerHTML =
+      `<div class="card"><div class="label">Error</div><div class="value down">${e.message}</div></div>`;
+  }
+}
+
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
