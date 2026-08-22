@@ -305,7 +305,7 @@ void shouldReorderTwoExistingStepsWithoutConflict() {
     ReplaceTutorialStepItem itemB = new ReplaceTutorialStepItem();
     itemB.setId(11L); itemB.setStepNumber(1); itemB.setInstruction("A");
 
-    ReplaceTutorialStepsRequest req = new ReplaceTutorialStepsRequest();
+    ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
     req.setSteps(List.of(itemA, itemB));
 
     // Must not throw — this is the exact swap that used to hit the
@@ -336,7 +336,7 @@ void shouldDeleteStepsOmittedFromThePayload() {
     ReplaceTutorialStepItem itemA = new ReplaceTutorialStepItem();
     itemA.setId(10L); itemA.setStepNumber(1); itemA.setInstruction("A");
 
-    ReplaceTutorialStepsRequest req = new ReplaceTutorialStepsRequest();
+    ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
     req.setSteps(List.of(itemA));
 
     tutorialStepService.replaceAll(1L, req);
@@ -351,7 +351,7 @@ void shouldRejectDuplicateStepNumbersInPayload() {
     ReplaceTutorialStepItem itemB = new ReplaceTutorialStepItem();
     itemB.setId(11L); itemB.setStepNumber(1); itemB.setInstruction("B");
 
-    ReplaceTutorialStepsRequest req = new ReplaceTutorialStepsRequest();
+    ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
     req.setSteps(List.of(itemA, itemB));
 
     when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
@@ -372,7 +372,7 @@ void shouldRejectStepIdThatDoesNotBelongToTutorial() {
     ReplaceTutorialStepItem foreignItem = new ReplaceTutorialStepItem();
     foreignItem.setId(999L); foreignItem.setStepNumber(1); foreignItem.setInstruction("Hijack");
 
-    ReplaceTutorialStepsRequest req = new ReplaceTutorialStepsRequest();
+    ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
     req.setSteps(List.of(foreignItem));
 
     assertThrows(ResourceNotFoundException.class,
@@ -386,7 +386,7 @@ void shouldThrowWhenReplacingStepsForNonExistingTutorial() {
     ReplaceTutorialStepItem item = new ReplaceTutorialStepItem();
     item.setStepNumber(1); item.setInstruction("A");
 
-    ReplaceTutorialStepsRequest req = new ReplaceTutorialStepsRequest();
+    ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
     req.setSteps(List.of(item));
 
     assertThrows(ResourceNotFoundException.class,
