@@ -203,4 +203,45 @@ describe('AdminTutorialFormView - save flow risk from FE-002', () => {
       name: 'admin-tutorials-list'
     })
   })
+
+  it('saves reordered steps without a false 409 conflict (FE-028)', async () => {
+    setUpEditMode()
+
+    // Mock backend enforcing the real unique (tutorial_id, step_number) constraint.
+    const liveNumbers = new Map([
+      [10, 1],
+      [11, 2],
+      [12, 3]
+    ])
+    stepsApi.updateStep.mockImplementation((id, { stepNumber }) => {
+      for (const [otherId, otherNumber] of liveNumbers) {
+        if (otherId !== id && otherNumber === stepNumber) {
+          return Promise.reject({ response: { status: 409 } })
+        }
+      }
+      liveNumbers.set(id, stepNumber)
+      return Promise.resolve({})
+    })
+
+    const wrapper = mountForm({ id: 5 })
+
+    await flushPromises()
+
+    // Swap step A (id 10) and step B (id 11) via move-down on the first row.
+    await wrapper.find('[aria-label="Move step down"]').trigger('click')
+
+    await wrapper.find('form').trigger('submit')
+
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('Could not save this tutorial.')
+    expect(push).toHaveBeenCalledWith({
+      name: 'admin-tutorials-list'
+    })
+
+    // Final state: B=1, A=2, C=3.
+    expect(liveNumbers.get(11)).toBe(1)
+    expect(liveNumbers.get(10)).toBe(2)
+    expect(liveNumbers.get(12)).toBe(3)
+  })
 })
