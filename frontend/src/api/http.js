@@ -1,43 +1,70 @@
 import axios from 'axios'
 
-// The Taskora API uses Spring Security session cookies (JSESSIONID), not
-// bearer tokens. `withCredentials: true` is required so the browser sends
-// and stores that cookie on every request.
+let memoryCsrfToken = null
+
 const http = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1',
-  withCredentials: true,
-  // Frontend (localhost:5173) and backend (localhost:8080) are different
-  // origins (different port), so axios treats this as cross-origin and
-  // won't attach the XSRF-TOKEN cookie as an X-XSRF-TOKEN header by default
-  // (security default since axios 1.6.0 / CVE-2023-45857). Safe to force
-  // this on here since baseURL is fixed to our own backend only, never an
-  // arbitrary host.
-  withXSRFToken: true,
-  headers: {
-    'Content-Type': 'application/json'
-  }
+  baseURL: import.meta.env.VITE_API_URL || '',
+  withCredentials: true
 })
 
-// Extract the backend's { success, message } error shape (ApiErrorResponse)
-// so components can just show error.message, and clear the local session
-// if the server says we're no longer authenticated.
-http.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const backendMessage = error.response?.data?.message
-    error.message = backendMessage || error.message
+function getCookie(name) {
+  if (typeof document === 'undefined') return null
+  const match = document.cookie.match(new RegExp('(^|;\\s*)(' + name + ')=([^;]*)'))
+  return match ? decodeURIComponent(match[3]) : null
+}
 
-    if (error.response?.status === 401) {
-      // Dynamic import avoids a circular import at module-load time
-      // (store -> auth.api -> http -> store).
-      const { useAuthStore } = await import('../stores/auth')
-      useAuthStore().clearSession()
+function extractToken(headers) {
+  if (!headers) return null
+  return (
+    headers['x-xsrf-token'] ||
+    headers['X-XSRF-TOKEN'] ||
+    (typeof headers.get === 'function' ? headers.get('x-xsrf-token') : null)
+  )
+}
+
+function saveCsrfToken(token) {
+  if (token) {
+    memoryCsrfToken = token
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      sessionStorage.setItem('csrf_token', token)
     }
+  }
+}
 
+function getStoredCsrfToken() {
+  return (
+    memoryCsrfToken ||
+    (typeof window !== 'undefined' && window.sessionStorage
+      ? sessionStorage.getItem('csrf_token')
+      : null) ||
+    getCookie('XSRF-TOKEN')
+  )
+}
+
+// Request Interceptor: Attach X-XSRF-TOKEN header to all state-changing requests
+http.interceptors.request.use(
+  (config) => {
+    const token = getStoredCsrfToken()
+    if (token) {
+      config.headers['X-XSRF-TOKEN'] = token
+    }
+    return config
+  },
+  (error) => Promise.reject(error)
+)
+
+// Response Interceptor: Capture X-XSRF-TOKEN header from any incoming response
+http.interceptors.response.use(
+  (response) => {
+    const token = extractToken(response.headers)
+    saveCsrfToken(token)
+    return response
+  },
+  (error) => {
+    const token = extractToken(error.response?.headers)
+    saveCsrfToken(token)
     return Promise.reject(error)
   }
 )
 
 export default http
-
-
