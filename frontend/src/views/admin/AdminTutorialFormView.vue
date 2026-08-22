@@ -104,9 +104,24 @@ async function handleSubmit() {
       if (firstRealError) throw firstRealError
     }
 
-    for (let index = 0; index < steps.value.length; index += 1) {
-      const step = steps.value[index]
-      const stepPayload = { stepNumber: index + 1, instruction: step.instruction, imageUrl: step.imageUrl }
+    const TEMP_STEP_NUMBER_OFFSET = 1_000_000
+    const targets = steps.value.map((step, index) => ({ step, stepNumber: index + 1 }))
+    const existingTargets = targets.filter((t) => t.step.id)
+
+    // Pass 1: move all existing steps to guaranteed-unique temp numbers first,
+    // so no two rows can ever collide while final numbers get assigned below.
+    for (let i = 0; i < existingTargets.length; i += 1) {
+      const { step } = existingTargets[i]
+      await updateStep(step.id, {
+        stepNumber: TEMP_STEP_NUMBER_OFFSET + i,
+        instruction: step.instruction,
+        imageUrl: step.imageUrl
+      })
+    }
+
+    // Pass 2: write the real final numbers.
+    for (const { step, stepNumber } of targets) {
+      const stepPayload = { stepNumber, instruction: step.instruction, imageUrl: step.imageUrl }
 
       if (step.id) {
         await updateStep(step.id, stepPayload)
