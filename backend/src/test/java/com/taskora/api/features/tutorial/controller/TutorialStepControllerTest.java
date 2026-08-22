@@ -26,6 +26,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.taskora.api.common.storage.SupabaseStorageClient;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialStepRequest;
+import com.taskora.api.features.tutorial.dto.request.ReplaceTutorialStepItem;
+import com.taskora.api.features.tutorial.dto.request.ReplaceTutorialStepRequest;
 import com.taskora.api.features.tutorial.dto.request.UpdateTutorialStepRequest;
 import com.taskora.api.features.tutorial.dto.response.TutorialStepResponse;
 import com.taskora.api.features.tutorial.service.TutorialStepService;
@@ -150,6 +152,53 @@ class TutorialStepControllerTest {
         .andExpect(jsonPath("$.imageUrl").value("https://example.com/updated.png"));
 
         verify(tutorialStepService).update(eq(10L), any(UpdateTutorialStepRequest.class));
+    }
+
+    @Test
+    void shouldReplaceAllTutorialSteps() throws Exception {
+        ReplaceTutorialStepItem item = new ReplaceTutorialStepItem();
+        item.setId(10L);
+        item.setStepNumber(1);
+        item.setInstruction("Open the project.");
+        item.setImageUrl("https://example.com/image.png");
+
+        ReplaceTutorialStepRequest request = new ReplaceTutorialStepRequest();
+        request.setSteps(List.of(item));
+
+        TutorialStepResponse response = new TutorialStepResponse();
+        response.setId(10L);
+        response.setStepNumber(1);
+        response.setInstruction("Open the project.");
+        response.setImageUrl("https://example.com/image.png");
+
+        when(tutorialStepService.replaceAll(eq(1L), any(ReplaceTutorialStepRequest.class)))
+                .thenReturn(List.of(response));
+
+        mockMvc.perform(
+                put("/api/v1/tutorials/1/steps")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(1))
+        .andExpect(jsonPath("$[0].id").value(10))
+        .andExpect(jsonPath("$[0].stepNumber").value(1))
+        .andExpect(jsonPath("$[0].instruction").value("Open the project."));
+
+        verify(tutorialStepService).replaceAll(eq(1L), any(ReplaceTutorialStepRequest.class));
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenReplacingWithEmptyStepsList() throws Exception {
+        ReplaceTutorialStepRequest request = new ReplaceTutorialStepRequest();
+        request.setSteps(List.of());
+
+        mockMvc.perform(
+                put("/api/v1/tutorials/1/steps")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isBadRequest());
     }
 
     @Test
