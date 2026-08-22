@@ -22,7 +22,9 @@ import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
 import jakarta.servlet.http.HttpServletResponse;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.taskora.api.common.dto.response.ApiErrorResponse;
 
@@ -93,11 +95,14 @@ public class SecurityConfig {
                             "/api/v1/tutorials/**",
                             "/api/v1/tutorial-steps/**")
                         .permitAll()
+                    .requestMatchers(HttpMethod.GET,
+                            "/api/v1/admin/**")
+                        .hasRole(ROLE_ADMIN)
                     .requestMatchers(HttpMethod.POST,
-        "/api/v1/tutorials",
-        "/api/v1/tutorials/*/steps",
-        "/api/v1/tutorial-steps/images")
-    .hasRole(ROLE_ADMIN)
+                            "/api/v1/tutorials",
+                            "/api/v1/tutorials/*/steps",
+                            "/api/v1/tutorial-steps/images")
+                        .hasRole(ROLE_ADMIN)
                     .requestMatchers(HttpMethod.PUT,
                             "/api/v1/tutorials/*",
                             "/api/v1/tutorial-steps/*")
@@ -108,20 +113,17 @@ public class SecurityConfig {
                         .hasRole(ROLE_ADMIN)
                     .anyRequest().authenticated())
             .exceptionHandling(exception -> exception
+                    .authenticationEntryPoint((request, response, authException) -> {
+                        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                        response.setContentType("application/json");
 
+                        ApiErrorResponse errorResponse = new ApiErrorResponse();
+                        errorResponse.setSuccess(false);
+                        errorResponse.setMessage("Authentication required.");
 
-.authenticationEntryPoint((request, response, authException) -> {
-    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-    response.setContentType("application/json");
-
-    ApiErrorResponse errorResponse = new ApiErrorResponse();
-    errorResponse.setSuccess(false);
-    errorResponse.setMessage("Authentication required.");
-
-    new ObjectMapper().writeValue(response.getWriter(), errorResponse);
-}))
+                        new ObjectMapper().writeValue(response.getWriter(), errorResponse);
+                    }))
             .formLogin(AbstractHttpConfigurer::disable)
-
             .logout(logout -> logout
                     .logoutUrl("/api/v1/users/logout")
                     .invalidateHttpSession(true)
