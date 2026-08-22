@@ -30,6 +30,9 @@ import com.taskora.api.features.tutorial.repository.TutorialStepRepository;
 @Service
 public class TutorialStepServiceImpl implements TutorialStepService {
 
+    private static final String TUTORIAL_NOT_FOUND_MESSAGE = "Tutorial not found.";
+    private static final String TUTORIAL_STEP_NOT_FOUND_MESSAGE = "Tutorial step not found.";
+
     private final TutorialStepRepository tutorialStepRepository;
     private final TutorialRepository tutorialRepository;
     private final TutorialStepMapper tutorialStepMapper;
@@ -54,7 +57,7 @@ public class TutorialStepServiceImpl implements TutorialStepService {
 
         Tutorial tutorial = tutorialRepository.findById(tutorialId)
                 .orElseThrow(() ->
-                        new ResourceNotFoundException("Tutorial not found."));
+                        new ResourceNotFoundException(TUTORIAL_NOT_FOUND_MESSAGE));
 
         if (tutorialStepRepository.existsByTutorialIdAndStepNumber(
                 tutorialId, request.getStepNumber())) {
@@ -79,10 +82,10 @@ public class TutorialStepServiceImpl implements TutorialStepService {
         TutorialStep tutorialStep = tutorialStepRepository.findById(id)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
-                                "Tutorial step not found."));
+                                TUTORIAL_STEP_NOT_FOUND_MESSAGE));
 
         if (isDraftHiddenFromCaller(tutorialStep.getTutorial())) {
-            throw new ResourceNotFoundException("Tutorial step not found.");
+            throw new ResourceNotFoundException(TUTORIAL_STEP_NOT_FOUND_MESSAGE);
         }
 
         return tutorialStepMapper.toResponse(tutorialStep);
@@ -94,10 +97,10 @@ public class TutorialStepServiceImpl implements TutorialStepService {
 
         Tutorial tutorial = tutorialRepository.findById(tutorialId)
                 .orElseThrow(() ->
-                        new ResourceNotFoundException("Tutorial not found."));
+                        new ResourceNotFoundException(TUTORIAL_NOT_FOUND_MESSAGE));
 
         if (isDraftHiddenFromCaller(tutorial)) {
-            throw new ResourceNotFoundException("Tutorial not found.");
+            throw new ResourceNotFoundException(TUTORIAL_NOT_FOUND_MESSAGE);
         }
 
         return tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(tutorialId)
@@ -114,7 +117,7 @@ public class TutorialStepServiceImpl implements TutorialStepService {
         TutorialStep tutorialStep = tutorialStepRepository.findById(id)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
-                                "Tutorial step not found."));
+                                TUTORIAL_STEP_NOT_FOUND_MESSAGE));
 
         Long tutorialId = tutorialStep.getTutorial().getId();
 
@@ -138,7 +141,7 @@ public class TutorialStepServiceImpl implements TutorialStepService {
 
         if (!tutorialStepRepository.existsById(id)) {
             throw new ResourceNotFoundException(
-                    "Tutorial step not found.");
+                    TUTORIAL_STEP_NOT_FOUND_MESSAGE);
         }
 
         tutorialStepRepository.deleteById(id);
@@ -158,7 +161,7 @@ public class TutorialStepServiceImpl implements TutorialStepService {
 
         Tutorial tutorial = tutorialRepository.findById(tutorialId)
                 .orElseThrow(() ->
-                        new ResourceNotFoundException("Tutorial not found."));
+                        new ResourceNotFoundException(TUTORIAL_NOT_FOUND_MESSAGE));
 
         List<ReplaceTutorialStepItem> incoming = request.getSteps();
 
