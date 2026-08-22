@@ -53,6 +53,8 @@ public class SecurityConfig {
                 List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(
                 List.of("Content-Type", "Authorization", "X-XSRF-TOKEN"));
+        configuration.setExposedHeaders(
+                List.of("X-XSRF-TOKEN"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
@@ -73,10 +75,6 @@ public class SecurityConfig {
             .csrf(csrf -> csrf
                     .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                     .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
-                    // No session exists yet at login time, so there's nothing
-                    // for the CSRF cookie to protect on this specific request.
-                    // Brute-force / automated login attempts are covered by
-                    // LoginRateLimiter instead.
                     .ignoringRequestMatchers("/api/v1/users/login"))
             .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
             .sessionManagement(session -> session
