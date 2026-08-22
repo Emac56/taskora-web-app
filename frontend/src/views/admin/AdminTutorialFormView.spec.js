@@ -70,6 +70,67 @@ describe('AdminTutorialFormView - create mode happy path', () => {
   })
 })
 
+describe('AdminTutorialFormView - FE-029 zero-step submission', () => {
+  it('blocks submit and shows an error when the only step is removed before saving', async () => {
+    const wrapper = mountForm()
+
+    await flushPromises()
+
+    // Sanity check: create mode starts with exactly one blank step.
+    expect(removeButtons(wrapper)).toHaveLength(1)
+
+    // Reproduce the reachable path from the report: remove the last step.
+    await removeButtons(wrapper)[0].trigger('click')
+
+    expect(wrapper.text()).toContain('No steps yet. Add at least one step below.')
+
+    await wrapper.find('#title').setValue('New Tutorial')
+    await wrapper.find('#description').setValue('Description here')
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(tutorialsApi.createTutorial).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('Add at least one step before saving.')
+  })
+
+  it('still allows saving once a step is added back after being cleared to zero', async () => {
+    tutorialsApi.createTutorial.mockResolvedValue({ id: 99 })
+    stepsApi.createStep.mockResolvedValue({ id: 501 })
+
+    const wrapper = mountForm()
+
+    await flushPromises()
+
+    // Drop to zero steps first, confirming the guard blocks it.
+    await removeButtons(wrapper)[0].trigger('click')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(tutorialsApi.createTutorial).not.toHaveBeenCalled()
+
+    // Add a step back via the "+ Add Step" button, then fill it in and save.
+    const addStepButton = wrapper
+      .findAll('button')
+      .find((b) => b.text() === '+ Add Step')
+    await addStepButton.trigger('click')
+
+    await wrapper.find('#title').setValue('New Tutorial')
+    await wrapper.find('#description').setValue('Description here')
+    await wrapper.findAll('textarea')[1].setValue('Do the first thing')
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(tutorialsApi.createTutorial).toHaveBeenCalledWith({
+      title: 'New Tutorial',
+      description: 'Description here',
+      status: 'DRAFT'
+    })
+    expect(wrapper.text()).not.toContain('Add at least one step before saving.')
+  })
+})
+
 describe('AdminTutorialFormView - save flow risk from FE-002', () => {
   const existingSteps = [
     {

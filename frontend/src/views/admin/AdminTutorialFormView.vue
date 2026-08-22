@@ -77,6 +77,11 @@ onMounted(async () => {
 })
 
 async function handleSubmit() {
+  if (steps.value.length === 0) {
+    errorMessage.value = 'Add at least one step before saving.'
+    return
+  }
+
   saving.value = true
   errorMessage.value = ''
 
