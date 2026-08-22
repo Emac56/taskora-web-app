@@ -22,7 +22,7 @@ import com.taskora.api.common.exception.ResourceNotFoundException;
 import com.taskora.api.common.security.CurrentUserProvider;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialStepRequest;
 import com.taskora.api.features.tutorial.dto.request.ReplaceTutorialStepItem;      // ← BAGO
-import com.taskora.api.features.tutorial.dto.request.ReplaceTutorialStepsRequest;  // ← BAGO
+import com.taskora.api.features.tutorial.dto.request.ReplaceTutorialStepRequest;  // ← BAGO
 import com.taskora.api.features.tutorial.dto.request.UpdateTutorialStepRequest;
 import com.taskora.api.features.tutorial.dto.response.TutorialStepResponse;
 import com.taskora.api.features.tutorial.entity.Tutorial;
