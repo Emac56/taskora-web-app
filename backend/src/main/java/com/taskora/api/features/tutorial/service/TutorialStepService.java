@@ -21,5 +21,5 @@ public interface TutorialStepService {
 
     // NEW: atomic bulk replace — one DB transaction handles all
     // creates/updates/deletes/reordering for a tutorial's steps.
-    List<TutorialStepResponse> replaceAll(Long tutorialId, ReplaceTutorialStepsRequest request);
+    List<TutorialStepResponse> replaceAll(Long tutorialId, ReplaceTutorialStepRequest request);
 }
