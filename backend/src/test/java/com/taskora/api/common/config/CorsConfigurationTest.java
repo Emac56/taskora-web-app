@@ -1,3 +1,4 @@
+
 package com.taskora.api.common.config;
 
 import static org.mockito.Mockito.when;
@@ -37,7 +38,7 @@ class CorsConfigurationTest {
     private TutorialService tutorialService;
 
     @Test
-    void allowedOriginShouldReceiveCorsHeadersOnActualRequest() throws Exception {
+    void allowedOriginShouldReceiveCorsHeadersAndExposedCsrfHeader() throws Exception {
 
         when(tutorialService.getAll()).thenReturn(List.of());
 
@@ -46,10 +47,10 @@ class CorsConfigurationTest {
                         .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
         )
         .andExpect(status().isOk())
-        .andExpect(header().string(
-                "Access-Control-Allow-Origin", ALLOWED_ORIGIN))
-        .andExpect(header().string(
-                "Access-Control-Allow-Credentials", "true"));
+        .andExpect(header().string("Access-Control-Allow-Origin", ALLOWED_ORIGIN))
+        .andExpect(header().string("Access-Control-Allow-Credentials", "true"))
+        .andExpect(header().string("Access-Control-Expose-Headers", "X-XSRF-TOKEN"))
+        .andExpect(header().exists("X-XSRF-TOKEN"));
     }
 
     @Test
@@ -59,13 +60,11 @@ class CorsConfigurationTest {
                 options("/api/v1/tutorials")
                         .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
-                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Content-Type")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Content-Type,X-XSRF-TOKEN")
         )
         .andExpect(status().isOk())
-        .andExpect(header().string(
-                "Access-Control-Allow-Origin", ALLOWED_ORIGIN))
-        .andExpect(header().string(
-                "Access-Control-Allow-Credentials", "true"))
+        .andExpect(header().string("Access-Control-Allow-Origin", ALLOWED_ORIGIN))
+        .andExpect(header().string("Access-Control-Allow-Credentials", "true"))
         .andExpect(header().string(
                 "Access-Control-Allow-Methods",
                 org.hamcrest.Matchers.containsString("POST")));
