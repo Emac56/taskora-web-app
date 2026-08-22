@@ -26,6 +26,20 @@ class SupabaseStorageClientTest {
     private static final String SERVICE_ROLE_KEY = "test-service-role-key";
     private static final String BUCKET = "tutorial-step-images";
 
+    // Real magic bytes — these are what the fix in SupabaseStorageClient now
+    // checks the file content against, so fixtures must be real signatures,
+    // not arbitrary strings. Full valid image files aren't needed since the
+    // check only inspects the header.
+    private static final byte[] PNG_BYTES = {
+            (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
+    };
+    private static final byte[] JPEG_BYTES = {
+            (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0x00, 0x01, 0x02
+    };
+    private static final byte[] WEBP_BYTES = {
+            'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'E', 'B', 'P'
+    };
+
     private SupabaseStorageClient client;
     private MockRestServiceServer mockServer;
 
@@ -42,7 +56,7 @@ class SupabaseStorageClientTest {
                 "file",
                 "screenshot.png",
                 "image/png",
-                "fake-image-bytes".getBytes()
+                PNG_BYTES
         );
 
         mockServer.expect(requestTo(org.hamcrest.Matchers.startsWith(SUPABASE_URL + "/storage/v1/object/" + BUCKET + "/")))
@@ -101,9 +115,72 @@ class SupabaseStorageClientTest {
     }
 
     @Test
+    void uploadShouldSucceedForValidJpegImage() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "photo.jpg", "image/jpeg", JPEG_BYTES
+        );
+
+        mockServer.expect(requestTo(org.hamcrest.Matchers.startsWith(SUPABASE_URL + "/storage/v1/object/" + BUCKET + "/")))
+                .andExpect(method(HttpMethod.PUT))
+                .andRespond(withSuccess());
+
+        String resultUrl = client.upload(file);
+
+        assertTrue(resultUrl.endsWith(".jpg"));
+        mockServer.verify();
+    }
+
+    @Test
+    void uploadShouldSucceedForValidWebpImage() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "banner.webp", "image/webp", WEBP_BYTES
+        );
+
+        mockServer.expect(requestTo(org.hamcrest.Matchers.startsWith(SUPABASE_URL + "/storage/v1/object/" + BUCKET + "/")))
+                .andExpect(method(HttpMethod.PUT))
+                .andRespond(withSuccess());
+
+        String resultUrl = client.upload(file);
+
+        assertTrue(resultUrl.endsWith(".webp"));
+        mockServer.verify();
+    }
+
+    @Test
+    void uploadShouldRejectFileWhenDeclaredContentTypeDoesNotMatchActualBytes() {
+        // Declares itself as a PNG via the multipart header, but the actual
+        // bytes are a JPEG. This is exactly the spoofing scenario the fix
+        // closes — the allow-list check alone would have let this through.
+        MockMultipartFile spoofedFile = new MockMultipartFile(
+                "file", "shell.png", "image/png", JPEG_BYTES
+        );
+
+        InvalidFileException ex = assertThrows(
+                InvalidFileException.class,
+                () -> client.upload(spoofedFile)
+        );
+        assertEquals("Image content does not match its declared type.", ex.getMessage());
+    }
+
+    @Test
+    void uploadShouldRejectFileWithAllowedContentTypeHeaderButNonImageBytes() {
+        // Declared type is on the allow-list, but the bytes match no known
+        // image signature at all (e.g. an HTML/JS payload renamed to .png).
+        MockMultipartFile spoofedFile = new MockMultipartFile(
+                "file", "payload.png", "image/png", "<script>alert(1)</script>".getBytes()
+        );
+
+        InvalidFileException ex = assertThrows(
+                InvalidFileException.class,
+                () -> client.upload(spoofedFile)
+        );
+        assertEquals("Image content does not match its declared type.", ex.getMessage());
+    }
+
+    @Test
     void uploadShouldThrowImageUploadExceptionWhenSupabaseReturnsError() {
         MockMultipartFile file = new MockMultipartFile(
-                "file", "image.png", "image/png", "bytes".getBytes()
+                "file", "image.png", "image/png", PNG_BYTES
         );
 
         mockServer.expect(requestTo(org.hamcrest.Matchers.startsWith(SUPABASE_URL + "/storage/v1/object/" + BUCKET + "/")))
