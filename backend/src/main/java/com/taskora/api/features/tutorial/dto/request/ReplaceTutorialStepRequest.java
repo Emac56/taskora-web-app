@@ -10,7 +10,7 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class ReplaceTutorialStepsRequest {
+public class ReplaceTutorialStepRequest {
 
     @NotEmpty(message = "At least one step is required.")
     @Valid
