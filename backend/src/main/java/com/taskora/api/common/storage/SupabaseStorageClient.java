@@ -1,6 +1,8 @@
 package com.taskora.api.common.storage;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -48,6 +50,20 @@ public class SupabaseStorageClient {
 
     private static final long MAX_FILE_SIZE_BYTES = 5L * 1024 * 1024;
 
+    // Magic-byte signatures for the three formats above. The declared
+    // multipart Content-Type header is client-supplied and trivially
+    // spoofable (see validate()) — these are checked against the actual
+    // file bytes, which the client does not control.
+    private static final byte[] PNG_SIGNATURE =
+            {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+    private static final byte[] JPEG_SIGNATURE =
+            {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
+    private static final byte[] RIFF_SIGNATURE = {'R', 'I', 'F', 'F'};
+    private static final byte[] WEBP_SIGNATURE = {'W', 'E', 'B', 'P'};
+    private static final int WEBP_SIGNATURE_OFFSET = 8;
+    // Longest signature we need to inspect: RIFF(4) + size field(4) + WEBP(4).
+    private static final int MAGIC_HEADER_LENGTH = 12;
+
     private final RestClient restClient;
     private final String publicBaseUrl;
 
@@ -68,7 +84,7 @@ public class SupabaseStorageClient {
     }
 
     public String upload(MultipartFile file) {
-        validate(file);
+        String verifiedContentType = validate(file);
 
         String objectPath =
                 UUID.randomUUID() + extractExtension(file.getOriginalFilename());
@@ -76,7 +92,7 @@ public class SupabaseStorageClient {
         try {
             restClient.put()
                     .uri("/" + objectPath)
-                    .contentType(MediaType.parseMediaType(file.getContentType()))
+                    .contentType(MediaType.parseMediaType(verifiedContentType))
                     .header("x-upsert", "false")
                     .body(file.getBytes())
                     .retrieve()
@@ -90,12 +106,23 @@ public class SupabaseStorageClient {
         return publicBaseUrl + "/" + objectPath;
     }
 
-    private void validate(MultipartFile file) {
+    /**
+     * Validates the file and returns its verified content type.
+     *
+     * <p>The declared {@code Content-Type} multipart header is client-supplied
+     * and can be set to anything regardless of the actual file bytes. It is
+     * still checked against the allow-list first (cheap, rejects obviously
+     * wrong uploads early), but the value trusted for the actual upload —
+     * and therefore for what gets served back later — is the type detected
+     * from the file's magic bytes, not the client's claim.
+     */
+    private String validate(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new InvalidFileException("Image file is required.");
         }
 
-        if (!ALLOWED_CONTENT_TYPES.contains(file.getContentType())) {
+        String declaredContentType = file.getContentType();
+        if (!ALLOWED_CONTENT_TYPES.contains(declaredContentType)) {
             throw new InvalidFileException(
                     "Image must be PNG, JPEG, or WEBP.");
         }
@@ -103,6 +130,56 @@ public class SupabaseStorageClient {
         if (file.getSize() > MAX_FILE_SIZE_BYTES) {
             throw new InvalidFileException("Image must not exceed 5MB.");
         }
+
+        String actualContentType = detectActualContentType(file);
+        if (!declaredContentType.equals(actualContentType)) {
+            throw new InvalidFileException(
+                    "Image content does not match its declared type.");
+        }
+
+        return actualContentType;
+    }
+
+    private String detectActualContentType(MultipartFile file) {
+        byte[] header = readHeaderBytes(file, MAGIC_HEADER_LENGTH);
+
+        if (startsWith(header, PNG_SIGNATURE)) {
+            return "image/png";
+        }
+        if (startsWith(header, JPEG_SIGNATURE)) {
+            return "image/jpeg";
+        }
+        if (startsWith(header, RIFF_SIGNATURE)
+                && matchesAt(header, WEBP_SIGNATURE_OFFSET, WEBP_SIGNATURE)) {
+            return "image/webp";
+        }
+        return null;
+    }
+
+    private byte[] readHeaderBytes(MultipartFile file, int maxBytes) {
+        try (InputStream in = file.getInputStream()) {
+            byte[] buffer = new byte[maxBytes];
+            int bytesRead = in.readNBytes(buffer, 0, maxBytes);
+            return bytesRead == maxBytes ? buffer : Arrays.copyOf(buffer, bytesRead);
+        } catch (IOException exception) {
+            throw new InvalidFileException("Unable to read image file for validation.");
+        }
+    }
+
+    private boolean startsWith(byte[] data, byte[] signature) {
+        return matchesAt(data, 0, signature);
+    }
+
+    private boolean matchesAt(byte[] data, int offset, byte[] signature) {
+        if (data.length < offset + signature.length) {
+            return false;
+        }
+        for (int i = 0; i < signature.length; i++) {
+            if (data[offset + i] != signature[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private String extractExtension(String originalFilename) {
