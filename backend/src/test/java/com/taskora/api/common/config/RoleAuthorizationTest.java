@@ -24,6 +24,9 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.taskora.api.common.storage.SupabaseStorageClient;
+import com.taskora.api.features.admin.controller.AdminStatsController;
+import com.taskora.api.features.admin.dto.response.AdminDashboardStatsResponse;
+import com.taskora.api.features.admin.service.AdminStatsService;
 import com.taskora.api.features.tutorial.controller.TutorialController;
 import com.taskora.api.features.tutorial.controller.TutorialStepController;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialRequest;
@@ -36,10 +39,10 @@ import com.taskora.api.features.tutorial.enums.TutorialStatus;
 import com.taskora.api.features.tutorial.service.TutorialService;
 import com.taskora.api.features.tutorial.service.TutorialStepService;
 
-@WebMvcTest({TutorialController.class, TutorialStepController.class})
+@WebMvcTest({TutorialController.class, TutorialStepController.class, AdminStatsController.class})
 @Import(SecurityConfig.class)
 @AutoConfigureMockMvc
-class RoleAuthorizationTest {
+public class RoleAuthorizationTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -55,6 +58,9 @@ class RoleAuthorizationTest {
 
     @MockBean
     private SupabaseStorageClient supabaseStorageClient;
+
+    @MockBean
+    private AdminStatsService adminStatsService;
 
     private CreateTutorialRequest createTutorialRequest() {
         CreateTutorialRequest request = new CreateTutorialRequest();
@@ -309,6 +315,31 @@ class RoleAuthorizationTest {
                         .with(csrf())
         )
         .andExpect(status().isForbidden());
+    }
+
+    // ---------- GET admin dashboard stats: ADMIN only ----------
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void adminCanGetDashboardStats() throws Exception {
+        when(adminStatsService.getDashboardStats())
+                .thenReturn(new AdminDashboardStatsResponse());
+
+        mockMvc.perform(get("/api/v1/admin/stats"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(roles = "CLIENT")
+    void clientCannotGetDashboardStats() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/stats"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void unauthenticatedCannotGetDashboardStats() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/stats"))
+                .andExpect(status().isUnauthorized());
     }
 
     // ---------- Unauthenticated ----------
