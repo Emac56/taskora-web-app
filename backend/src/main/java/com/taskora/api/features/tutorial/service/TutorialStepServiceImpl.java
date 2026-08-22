@@ -154,7 +154,7 @@ public class TutorialStepServiceImpl implements TutorialStepService {
     @Transactional
     public List<TutorialStepResponse> replaceAll(
             Long tutorialId,
-            ReplaceTutorialStepsRequest request) {
+            ReplaceTutorialStepRequest request) {
 
         Tutorial tutorial = tutorialRepository.findById(tutorialId)
                 .orElseThrow(() ->
