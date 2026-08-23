@@ -5,6 +5,7 @@ import java.util.List;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialRequest;
 import com.taskora.api.features.tutorial.dto.request.UpdateTutorialRequest;
 import com.taskora.api.features.tutorial.dto.response.TutorialResponse;
+import com.taskora.api.features.tutorial.dto.response.TutorialStatsResponse;
 
 public interface TutorialService {
 
@@ -17,4 +18,6 @@ public interface TutorialService {
     TutorialResponse update(Long id, UpdateTutorialRequest request);
 
     void delete(Long id);
+
+    TutorialStatsResponse getStats();
 }

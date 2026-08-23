@@ -3,8 +3,7 @@ import { ref, onMounted } from 'vue'
 import AdminLayout from '../../layouts/AdminLayout.vue'
 import StatCard from '../../features/dashboard/components/StatCard.vue'
 import { useAuthStore } from '../../stores/auth'
-import { getAllTutorials } from '../../api/tutorials.api'
-import { getStepsByTutorialId } from '../../api/tutorialSteps.api'
+import { getTutorialStats } from '../../api/tutorials.api'
 
 const authStore = useAuthStore()
 
@@ -17,15 +16,11 @@ const totalSteps = ref(0)
 
 onMounted(async () => {
   try {
-    const tutorials = await getAllTutorials()
-    totalTutorials.value = tutorials.length
-    publishedCount.value = tutorials.filter((t) => t.status === 'PUBLISHED').length
-    draftCount.value = tutorials.filter((t) => t.status === 'DRAFT').length
-
-    const stepLists = await Promise.all(
-      tutorials.map((t) => getStepsByTutorialId(t.id))
-    )
-    totalSteps.value = stepLists.reduce((sum, steps) => sum + steps.length, 0)
+    const stats = await getTutorialStats()
+    totalTutorials.value = stats.totalTutorials
+    publishedCount.value = stats.publishedCount
+    draftCount.value = stats.draftCount
+    totalSteps.value = stats.totalSteps
   } catch (error) {
     errorMessage.value = error.message || 'Could not load dashboard data.'
   } finally {

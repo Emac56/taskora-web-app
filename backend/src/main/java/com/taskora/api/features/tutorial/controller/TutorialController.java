@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialRequest;
 import com.taskora.api.features.tutorial.dto.request.UpdateTutorialRequest;
 import com.taskora.api.features.tutorial.dto.response.TutorialResponse;
+import com.taskora.api.features.tutorial.dto.response.TutorialStatsResponse;
 import com.taskora.api.features.tutorial.service.TutorialService;
 
 import jakarta.validation.Valid;
@@ -51,6 +52,14 @@ public class TutorialController {
     public ResponseEntity<List<TutorialResponse>> getAll() {
 
         List<TutorialResponse> response = tutorialService.getAll();
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/stats")
+    public ResponseEntity<TutorialStatsResponse> getStats() {
+
+        TutorialStatsResponse response = tutorialService.getStats();
 
         return ResponseEntity.ok(response);
     }

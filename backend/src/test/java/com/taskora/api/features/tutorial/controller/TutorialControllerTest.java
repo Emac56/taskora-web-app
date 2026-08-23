@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialRequest;
 import com.taskora.api.features.tutorial.dto.request.UpdateTutorialRequest;
 import com.taskora.api.features.tutorial.dto.response.TutorialResponse;
+import com.taskora.api.features.tutorial.dto.response.TutorialStatsResponse;
 import com.taskora.api.features.tutorial.enums.TutorialStatus;
 import com.taskora.api.features.tutorial.service.TutorialService;
 
@@ -272,4 +273,20 @@ void shouldReturnBadRequestWhenUpdateDescriptionIsBlank()
     )
     .andExpect(status().isBadRequest());
 }
+    @Test
+void shouldGetTutorialStats() throws Exception {
+    TutorialStatsResponse response =
+            new TutorialStatsResponse(5, 3, 2, 17);
+
+    when(tutorialService.getStats()).thenReturn(response);
+
+    mockMvc.perform(get("/api/v1/tutorials/stats"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.totalTutorials").value(5))
+            .andExpect(jsonPath("$.publishedCount").value(3))
+            .andExpect(jsonPath("$.draftCount").value(2))
+            .andExpect(jsonPath("$.totalSteps").value(17));
+
+    verify(tutorialService).getStats();
+                                                      }
 }

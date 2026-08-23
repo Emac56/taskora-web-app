@@ -88,6 +88,8 @@ public class SecurityConfig {
                         .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/users/login")
                         .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/v1/tutorials/stats")
+                        .hasRole(ROLE_ADMIN)
                     .requestMatchers(HttpMethod.GET,
                             "/api/v1/tutorials",
                             "/api/v1/tutorials/**",
