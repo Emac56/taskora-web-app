@@ -18,6 +18,8 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.taskora.api.common.exception.DuplicateStepNumberException;
 import com.taskora.api.common.exception.ResourceNotFoundException;
@@ -246,6 +248,32 @@ class TutorialStepServiceImplTest {
                 .thenReturn(response);
 
         tutorialStepService.update(10L, updateRequest);
+
+        verify(supabaseStorageClient, never()).delete(ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldNotDeleteFromStorageWhenUpdatedStepHadNoPreviousImage() {
+        // previousImageUrl == null must short-circuit the && before ever
+        // reaching .equals() — SonarCloud flagged this branch as uncovered
+        // since every other update() test here starts from a step that
+        // already has an image.
+        TutorialStep stepWithoutImage = new TutorialStep();
+        stepWithoutImage.setId(30L);
+        stepWithoutImage.setTutorial(tutorial);
+        stepWithoutImage.setStepNumber(1);
+        stepWithoutImage.setImageUrl(null);
+
+        when(tutorialStepRepository.findById(30L))
+                .thenReturn(Optional.of(stepWithoutImage));
+        when(tutorialStepRepository.existsByTutorialIdAndStepNumberAndIdNot(1L, 2, 30L))
+                .thenReturn(false);
+        when(tutorialStepRepository.save(stepWithoutImage))
+                .thenReturn(stepWithoutImage);
+        when(tutorialStepMapper.toResponse(stepWithoutImage))
+                .thenReturn(response);
+
+        tutorialStepService.update(30L, updateRequest);
 
         verify(supabaseStorageClient, never()).delete(ArgumentMatchers.any());
     }
@@ -540,6 +568,53 @@ class TutorialStepServiceImplTest {
         tutorialStepService.replaceAll(1L, req);
 
         verify(supabaseStorageClient, never()).delete(ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldDeferStorageDeleteUntilAfterCommitWhenSynchronizationIsActive() {
+        // Every other replaceAll() storage test here runs outside a real
+        // Spring transaction, so isSynchronizationActive() is always false
+        // and only the else-branch (immediate delete) ever runs.
+        // SonarCloud flagged the true-branch — registerSynchronization()
+        // plus its afterCommit() callback — as uncovered. This simulates
+        // an actual active transaction to exercise it.
+        TutorialStep stepA = new TutorialStep();
+        stepA.setId(10L); stepA.setTutorial(tutorial); stepA.setStepNumber(1);
+        stepA.setImageUrl("https://example.com/old.png");
+
+        when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
+        when(tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(1L))
+                .thenReturn(List.of(stepA));
+        when(tutorialStepRepository.saveAllAndFlush(ArgumentMatchers.anyList()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(tutorialStepRepository.saveAll(ArgumentMatchers.anyList()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(tutorialStepMapper.toResponse(ArgumentMatchers.any())).thenReturn(response);
+
+        ReplaceTutorialStepItem itemA = new ReplaceTutorialStepItem();
+        itemA.setId(10L);
+        itemA.setStepNumber(1);
+        itemA.setInstruction("A");
+        itemA.setImageUrl("https://example.com/new.png");
+
+        ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
+        req.setSteps(List.of(itemA));
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            tutorialStepService.replaceAll(1L, req);
+
+            // Deferred: the delete must not fire while still "inside" the
+            // transaction — only once afterCommit() runs.
+            verify(supabaseStorageClient, never()).delete(ArgumentMatchers.any());
+
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(TransactionSynchronization::afterCommit);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        verify(supabaseStorageClient).delete("https://example.com/old.png");
     }
 
     // --------------------------------------------------------------------
