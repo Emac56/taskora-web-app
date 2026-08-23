@@ -64,41 +64,44 @@ onMounted(loadTutorials)
     />
 
     <div v-else class="overflow-hidden rounded-xl border border-gray-200 bg-white">
-      <table class="w-full text-left text-sm">
-        <thead class="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-          <tr>
-            <th class="px-5 py-3">ID</th>
-            <th class="px-5 py-3">Title</th>
-            <th class="px-5 py-3">Status</th>
-            <th class="px-5 py-3 text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-100">
-          <tr v-for="tutorial in tutorials" :key="tutorial.id">
-            <td class="px-5 py-4 text-gray-500">{{ tutorial.id }}</td>
-            <td class="px-5 py-4 font-medium text-navy">{{ tutorial.title }}</td>
-            <td class="px-5 py-4"><StatusBadge :status="tutorial.status" /></td>
-            <td class="px-5 py-4">
-              <div class="flex justify-end gap-3">
-                <RouterLink
-                  :to="{ name: 'admin-tutorial-edit', params: { id: tutorial.id } }"
-                  class="text-sm font-medium text-navy hover:underline"
-                >
-                  Edit
-                </RouterLink>
-                <button
-                  type="button"
-                  class="text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
-                  :disabled="deletingId === tutorial.id"
-                  @click="handleDelete(tutorial)"
-                >
-                  {{ deletingId === tutorial.id ? 'Deleting...' : 'Delete' }}
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] [touch-action:pan-x]">
+        <table class="w-full min-w-[640px] text-left text-sm">
+          <thead class="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+            <tr>
+              <th class="px-5 py-3">ID</th>
+              <th class="px-5 py-3">Title</th>
+              <th class="px-5 py-3">Status</th>
+              <th class="px-5 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <tr v-for="tutorial in tutorials" :key="tutorial.id">
+              <td class="px-5 py-4 text-gray-500">{{ tutorial.id }}</td>
+              <td class="px-5 py-4 font-medium text-navy">{{ tutorial.title }}</td>
+              <td class="px-5 py-4"><StatusBadge :status="tutorial.status" /></td>
+              <td class="px-5 py-4">
+                <div class="relative z-10 flex justify-end gap-3">
+                  <RouterLink
+                    :to="{ name: 'admin-tutorial-edit', params: { id: tutorial.id } }"
+                    class="rounded text-sm font-medium text-navy hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy"
+                  >
+                    Edit
+                  </RouterLink>
+                  <button
+                    type="button"
+                    class="rounded text-sm font-medium text-red-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:opacity-50"
+                    style="touch-action: manipulation"
+                    :disabled="deletingId === tutorial.id"
+                    @click="handleDelete(tutorial)"
+                  >
+                    {{ deletingId === tutorial.id ? 'Deleting...' : 'Delete' }}
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </AdminLayout>
 </template>
