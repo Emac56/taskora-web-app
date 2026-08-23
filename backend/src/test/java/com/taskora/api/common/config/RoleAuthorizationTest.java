@@ -323,4 +323,30 @@ class RoleAuthorizationTest {
         )
         .andExpect(status().isUnauthorized());
     }
+    // ---------- GET tutorial stats: ADMIN only ----------
+
+@Test
+@WithMockUser(roles = "ADMIN")
+void adminCanGetTutorialStats() throws Exception {
+    TutorialStatsResponse response =
+            new TutorialStatsResponse(5, 3, 2, 17);
+
+    when(tutorialService.getStats()).thenReturn(response);
+
+    mockMvc.perform(get("/api/v1/tutorials/stats"))
+            .andExpect(status().isOk());
+}
+
+@Test
+@WithMockUser(roles = "CLIENT")
+void clientCannotGetTutorialStats() throws Exception {
+    mockMvc.perform(get("/api/v1/tutorials/stats"))
+            .andExpect(status().isForbidden());
+}
+
+@Test
+void unauthenticatedCannotGetTutorialStats() throws Exception {
+    mockMvc.perform(get("/api/v1/tutorials/stats"))
+            .andExpect(status().isUnauthorized());
+}
 }
