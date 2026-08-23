@@ -53,7 +53,7 @@ function handleSubmit() {
       </div>
     </div>
 
-    <p v-if="errorMessage" class="text-sm font-medium text-red-600">
+    <p v-if="errorMessage" class="text-sm font-medium text-red-600" role="alert">
       {{ errorMessage }}
     </p>
 
