@@ -1,5 +1,6 @@
 package com.taskora.api.common.config;
 
+import com.taskora.api.features.tutorial.dto.response.TutorialStatsResponse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
