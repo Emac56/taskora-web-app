@@ -21,10 +21,12 @@ import com.taskora.api.common.security.CurrentUserProvider;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialRequest;
 import com.taskora.api.features.tutorial.dto.request.UpdateTutorialRequest;
 import com.taskora.api.features.tutorial.dto.response.TutorialResponse;
+import com.taskora.api.features.tutorial.dto.response.TutorialStatsResponse;
 import com.taskora.api.features.tutorial.entity.Tutorial;
 import com.taskora.api.features.tutorial.enums.TutorialStatus;
 import com.taskora.api.features.tutorial.mapper.TutorialMapper;
 import com.taskora.api.features.tutorial.repository.TutorialRepository;
+import com.taskora.api.features.tutorial.repository.TutorialStepRepository;
 
 @ExtendWith(MockitoExtension.class)
 class TutorialServiceImplTest {
@@ -37,6 +39,9 @@ class TutorialServiceImplTest {
 
     @Mock
     private CurrentUserProvider currentUserProvider;
+
+    @Mock
+    private TutorialStepRepository tutorialStepRepository;
 
     @InjectMocks
     private TutorialServiceImpl tutorialService;
@@ -289,6 +294,41 @@ void shouldIncludeDraftTutorialsInListWhenCallerIsAdmin() {
     assertEquals(draftResponse, result.get(1));
 
     verify(currentUserProvider).isAdmin();
+}
+
+@Test
+void shouldReturnAggregateStats() {
+    when(tutorialRepository.count()).thenReturn(5L);
+    when(tutorialRepository.countByStatus(TutorialStatus.PUBLISHED)).thenReturn(3L);
+    when(tutorialRepository.countByStatus(TutorialStatus.DRAFT)).thenReturn(2L);
+    when(tutorialStepRepository.count()).thenReturn(17L);
+
+    TutorialStatsResponse result = tutorialService.getStats();
+
+    assertEquals(5L, result.getTotalTutorials());
+    assertEquals(3L, result.getPublishedCount());
+    assertEquals(2L, result.getDraftCount());
+    assertEquals(17L, result.getTotalSteps());
+
+    verify(tutorialRepository).count();
+    verify(tutorialRepository).countByStatus(TutorialStatus.PUBLISHED);
+    verify(tutorialRepository).countByStatus(TutorialStatus.DRAFT);
+    verify(tutorialStepRepository).count();
+}
+
+@Test
+void shouldReturnZeroedStatsWhenNoTutorialsExist() {
+    when(tutorialRepository.count()).thenReturn(0L);
+    when(tutorialRepository.countByStatus(TutorialStatus.PUBLISHED)).thenReturn(0L);
+    when(tutorialRepository.countByStatus(TutorialStatus.DRAFT)).thenReturn(0L);
+    when(tutorialStepRepository.count()).thenReturn(0L);
+
+    TutorialStatsResponse result = tutorialService.getStats();
+
+    assertEquals(0L, result.getTotalTutorials());
+    assertEquals(0L, result.getPublishedCount());
+    assertEquals(0L, result.getDraftCount());
+    assertEquals(0L, result.getTotalSteps());
 }
 
 }
