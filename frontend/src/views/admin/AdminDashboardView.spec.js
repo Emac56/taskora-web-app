@@ -11,6 +11,15 @@ vi.mock('../../stores/auth', () => ({
   useAuthStore: () => ({ user: { name: 'Admin' } })
 }))
 
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+  RouterLink: {
+    name: 'RouterLink',
+    props: ['to'],
+    template: '<a @click="$emit(\'click\')"><slot /></a>'
+  }
+}))
+
 describe('AdminDashboardView', () => {
   it('calls getTutorialStats exactly once (no N+1 requests)', async () => {
     getTutorialStats.mockResolvedValueOnce({
