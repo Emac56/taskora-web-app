@@ -10,10 +10,12 @@ import com.taskora.api.common.security.CurrentUserProvider;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialRequest;
 import com.taskora.api.features.tutorial.dto.request.UpdateTutorialRequest;
 import com.taskora.api.features.tutorial.dto.response.TutorialResponse;
+import com.taskora.api.features.tutorial.dto.response.TutorialStatsResponse;
 import com.taskora.api.features.tutorial.entity.Tutorial;
 import com.taskora.api.features.tutorial.enums.TutorialStatus;
 import com.taskora.api.features.tutorial.mapper.TutorialMapper;
 import com.taskora.api.features.tutorial.repository.TutorialRepository;
+import com.taskora.api.features.tutorial.repository.TutorialStepRepository;
 
 @Service
 public class TutorialServiceImpl implements TutorialService {
@@ -21,14 +23,17 @@ public class TutorialServiceImpl implements TutorialService {
     private final TutorialRepository tutorialRepository;
     private final TutorialMapper tutorialMapper;
     private final CurrentUserProvider currentUserProvider;
+    private final TutorialStepRepository tutorialStepRepository;
 
     public TutorialServiceImpl(
             TutorialRepository tutorialRepository,
             TutorialMapper tutorialMapper,
-            CurrentUserProvider currentUserProvider) {
+            CurrentUserProvider currentUserProvider,
+            TutorialStepRepository tutorialStepRepository) {
         this.tutorialRepository = tutorialRepository;
         this.tutorialMapper = tutorialMapper;
         this.currentUserProvider = currentUserProvider;
+        this.tutorialStepRepository = tutorialStepRepository;
     }
 
     @Override
@@ -88,6 +93,18 @@ public class TutorialServiceImpl implements TutorialService {
         }
 
         tutorialRepository.deleteById(id);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TutorialStatsResponse getStats() {
+        long totalTutorials = tutorialRepository.count();
+        long publishedCount = tutorialRepository.countByStatus(TutorialStatus.PUBLISHED);
+        long draftCount = tutorialRepository.countByStatus(TutorialStatus.DRAFT);
+        long totalSteps = tutorialStepRepository.count();
+
+        return new TutorialStatsResponse(
+                totalTutorials, publishedCount, draftCount, totalSteps);
     }
 
     private boolean isDraftHiddenFromCaller(Tutorial tutorial) {
