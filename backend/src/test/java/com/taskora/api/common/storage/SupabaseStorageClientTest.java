@@ -21,7 +21,7 @@ import org.springframework.web.client.RestClient;
 import com.taskora.api.common.exception.ImageUploadException;
 import com.taskora.api.common.exception.InvalidFileException;
 
-class SupabaseStorageClientTest {
+public class SupabaseStorageClientTest {
 
     private static final String SUPABASE_URL = "https://test.supabase.co";
     private static final String SERVICE_ROLE_KEY = "test-service-role-key";
