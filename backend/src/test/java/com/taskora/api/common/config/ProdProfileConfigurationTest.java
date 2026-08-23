@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
  * from the classpath (no Spring context) to catch that class of bug before
  * it reaches a deployed environment.
  */
-class ProdProfileConfigurationTest {
+public class ProdProfileConfigurationTest {
 
     @Test
     void prodProfileMustDeclareCorsAllowedOrigins() throws IOException {
@@ -34,6 +34,19 @@ class ProdProfileConfigurationTest {
                 .isNotNull();
     }
 
+    @Test
+void prodProfileMustDeclareTrustProxyHeadersUnderTheCorrectKey() throws IOException {
+    Properties prodProps = loadProperties("application-prod.properties");
+    assertThat(prodProps.getProperty("app.security.trust-proxy-headers"))
+            .isEqualTo("true");
+}
+
+@Test
+void prodPropertyKeysMustNotHaveStrayLeadingCharacters() throws IOException {
+    Properties prodProps = loadProperties("application-prod.properties");
+    assertThat(prodProps.stringPropertyNames())
+            .allSatisfy(key -> assertThat(key).matches("^[a-zA-Z0-9].*"));
+}
     @Test
     void prodCorsOverrideMustNotBeTheDevLocalhostDefault() throws IOException {
         Properties baseProps = loadProperties("application.properties");
