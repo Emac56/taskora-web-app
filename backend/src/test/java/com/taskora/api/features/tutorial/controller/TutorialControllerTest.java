@@ -272,4 +272,20 @@ void shouldReturnBadRequestWhenUpdateDescriptionIsBlank()
     )
     .andExpect(status().isBadRequest());
 }
+    @Test
+void shouldGetTutorialStats() throws Exception {
+    TutorialStatsResponse response =
+            new TutorialStatsResponse(5, 3, 2, 17);
+
+    when(tutorialService.getStats()).thenReturn(response);
+
+    mockMvc.perform(get("/api/v1/tutorials/stats"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.totalTutorials").value(5))
+            .andExpect(jsonPath("$.publishedCount").value(3))
+            .andExpect(jsonPath("$.draftCount").value(2))
+            .andExpect(jsonPath("$.totalSteps").value(17));
+
+    verify(tutorialService).getStats();
+                                                      }
 }
