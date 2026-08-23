@@ -53,20 +53,6 @@ class CorsConfigurationTest {
     }
 
     @Test
-    void allowedOriginShouldReceiveExposedCsrfHeader() throws Exception {
-
-        when(tutorialService.getAll()).thenReturn(List.of());
-
-        mockMvc.perform(
-                get("/api/v1/tutorials")
-                        .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
-        )
-        .andExpect(status().isOk())
-        .andExpect(header().string(
-                "Access-Control-Expose-Headers", "X-XSRF-TOKEN"));
-    }
-
-    @Test
     void preflightRequestForPostShouldBeHandledCorrectly() throws Exception {
 
         mockMvc.perform(

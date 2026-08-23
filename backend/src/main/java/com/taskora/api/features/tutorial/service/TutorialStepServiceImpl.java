@@ -1,6 +1,13 @@
 package com.taskora.api.features.tutorial.service;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -9,6 +16,8 @@ import com.taskora.api.common.exception.DuplicateStepNumberException;
 import com.taskora.api.common.exception.ResourceNotFoundException;
 import com.taskora.api.common.security.CurrentUserProvider;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialStepRequest;
+import com.taskora.api.features.tutorial.dto.request.ReplaceTutorialStepItem;
+import com.taskora.api.features.tutorial.dto.request.ReplaceTutorialStepRequest;
 import com.taskora.api.features.tutorial.dto.request.UpdateTutorialStepRequest;
 import com.taskora.api.features.tutorial.dto.response.TutorialStepResponse;
 import com.taskora.api.features.tutorial.entity.Tutorial;
@@ -20,6 +29,9 @@ import com.taskora.api.features.tutorial.repository.TutorialStepRepository;
 
 @Service
 public class TutorialStepServiceImpl implements TutorialStepService {
+
+    private static final String TUTORIAL_NOT_FOUND_MESSAGE = "Tutorial not found.";
+    private static final String TUTORIAL_STEP_NOT_FOUND_MESSAGE = "Tutorial step not found.";
 
     private final TutorialStepRepository tutorialStepRepository;
     private final TutorialRepository tutorialRepository;
@@ -45,10 +57,8 @@ public class TutorialStepServiceImpl implements TutorialStepService {
 
         Tutorial tutorial = tutorialRepository.findById(tutorialId)
                 .orElseThrow(() ->
-                        new ResourceNotFoundException("Tutorial not found."));
+                        new ResourceNotFoundException(TUTORIAL_NOT_FOUND_MESSAGE));
 
-        // BE bug fix: reject duplicate stepNumber within the same tutorial
-        // before it ever reaches the database.
         if (tutorialStepRepository.existsByTutorialIdAndStepNumber(
                 tutorialId, request.getStepNumber())) {
             throw new DuplicateStepNumberException(
@@ -72,10 +82,10 @@ public class TutorialStepServiceImpl implements TutorialStepService {
         TutorialStep tutorialStep = tutorialStepRepository.findById(id)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
-                                "Tutorial step not found."));
+                                TUTORIAL_STEP_NOT_FOUND_MESSAGE));
 
         if (isDraftHiddenFromCaller(tutorialStep.getTutorial())) {
-            throw new ResourceNotFoundException("Tutorial step not found.");
+            throw new ResourceNotFoundException(TUTORIAL_STEP_NOT_FOUND_MESSAGE);
         }
 
         return tutorialStepMapper.toResponse(tutorialStep);
@@ -87,13 +97,12 @@ public class TutorialStepServiceImpl implements TutorialStepService {
 
         Tutorial tutorial = tutorialRepository.findById(tutorialId)
                 .orElseThrow(() ->
-                        new ResourceNotFoundException("Tutorial not found."));
+                        new ResourceNotFoundException(TUTORIAL_NOT_FOUND_MESSAGE));
 
         if (isDraftHiddenFromCaller(tutorial)) {
-            throw new ResourceNotFoundException("Tutorial not found.");
+            throw new ResourceNotFoundException(TUTORIAL_NOT_FOUND_MESSAGE);
         }
 
-        // Fetch steps ordered in ascending sequence from database
         return tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(tutorialId)
                 .stream()
                 .map(tutorialStepMapper::toResponse)
@@ -108,10 +117,8 @@ public class TutorialStepServiceImpl implements TutorialStepService {
         TutorialStep tutorialStep = tutorialStepRepository.findById(id)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
-                                "Tutorial step not found."));
+                                TUTORIAL_STEP_NOT_FOUND_MESSAGE));
 
-        // BE bug fix: reject duplicate stepNumber within the same tutorial,
-        // excluding this step itself (so keeping the same number is fine).
         Long tutorialId = tutorialStep.getTutorial().getId();
 
         if (tutorialStepRepository.existsByTutorialIdAndStepNumberAndIdNot(
@@ -134,10 +141,106 @@ public class TutorialStepServiceImpl implements TutorialStepService {
 
         if (!tutorialStepRepository.existsById(id)) {
             throw new ResourceNotFoundException(
-                    "Tutorial step not found.");
+                    TUTORIAL_STEP_NOT_FOUND_MESSAGE);
         }
 
         tutorialStepRepository.deleteById(id);
+    }
+
+    // NEW: atomic bulk replace. Single transaction — create, update, delete,
+    // and reorder all happen together or not at all. Fixes the root cause of
+    // "This operation conflicts with existing data": the old flow was N
+    // separate HTTP requests (one per step), so a mid-sequence failure left
+    // the tutorial's steps half-renumbered, and the next save attempt would
+    // collide against that stale state.
+    @Override
+    @Transactional
+    public List<TutorialStepResponse> replaceAll(
+            Long tutorialId,
+            ReplaceTutorialStepRequest request) {
+
+        Tutorial tutorial = tutorialRepository.findById(tutorialId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(TUTORIAL_NOT_FOUND_MESSAGE));
+
+        List<ReplaceTutorialStepItem> incoming = request.getSteps();
+
+        // Fail fast: reject duplicate stepNumbers in the payload itself,
+        // before touching the database.
+        long distinctStepNumbers = incoming.stream()
+                .map(ReplaceTutorialStepItem::getStepNumber)
+                .distinct()
+                .count();
+        if (distinctStepNumbers != incoming.size()) {
+            throw new DuplicateStepNumberException(
+                    "Step numbers must be unique within a tutorial.");
+        }
+
+        List<TutorialStep> existingSteps =
+                tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(tutorialId);
+        Map<Long, TutorialStep> existingById = existingSteps.stream()
+                .collect(Collectors.toMap(TutorialStep::getId, Function.identity()));
+
+        // Security: an id in the payload must belong to THIS tutorial —
+        // never trust a client-supplied id blindly.
+        for (ReplaceTutorialStepItem item : incoming) {
+            if (item.getId() != null && !existingById.containsKey(item.getId())) {
+                throw new ResourceNotFoundException(
+                        "Step " + item.getId() + " does not belong to this tutorial.");
+            }
+        }
+
+        Set<Long> incomingIds = incoming.stream()
+                .map(ReplaceTutorialStepItem::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        List<Long> idsToDelete = existingSteps.stream()
+                .map(TutorialStep::getId)
+                .filter(id -> !incomingIds.contains(id))
+                .toList();
+
+        if (!idsToDelete.isEmpty()) {
+            tutorialStepRepository.deleteAllByIdInBatch(idsToDelete);
+        }
+
+        // Phase 1: park every kept step at a guaranteed-unique negative
+        // stepNumber and flush. Postgres checks unique constraints per
+        // statement, not deferred — without this, swapping two existing
+        // steps' numbers would collide mid-transaction even though the
+        // final state is valid.
+        List<TutorialStep> kept = incoming.stream()
+                .filter(item -> item.getId() != null)
+                .map(item -> existingById.get(item.getId()))
+                .toList();
+
+        for (int i = 0; i < kept.size(); i++) {
+            kept.get(i).setStepNumber(-(i + 1));
+        }
+        tutorialStepRepository.saveAllAndFlush(kept);
+
+        // Phase 2: write real final numbers; create brand-new steps.
+        List<TutorialStep> toSave = new ArrayList<>();
+        for (ReplaceTutorialStepItem item : incoming) {
+            TutorialStep step = item.getId() != null
+                    ? existingById.get(item.getId())
+                    : new TutorialStep();
+
+            if (item.getId() == null) {
+                step.setTutorial(tutorial);
+            }
+            step.setStepNumber(item.getStepNumber());
+            step.setInstruction(item.getInstruction());
+            step.setImageUrl(item.getImageUrl());
+            toSave.add(step);
+        }
+
+        List<TutorialStep> saved = tutorialStepRepository.saveAll(toSave);
+
+        return saved.stream()
+                .sorted(Comparator.comparing(TutorialStep::getStepNumber))
+                .map(tutorialStepMapper::toResponse)
+                .toList();
     }
 
     private boolean isDraftHiddenFromCaller(Tutorial tutorial) {

@@ -12,8 +12,6 @@ export function getStepById(id) {
 
 // POST /api/v1/tutorials/{tutorialId}/steps (ADMIN)
 // -> body: { stepNumber, instruction, imageUrl }
-// imageUrl is optional - upload the file first via uploadStepImage(),
-// then pass the returned URL here.
 export function createStep(tutorialId, payload) {
   return http
     .post(`/tutorials/${tutorialId}/steps`, {
@@ -41,18 +39,27 @@ export function deleteStep(id) {
   return http.delete(`/tutorial-steps/${id}`)
 }
 
+// PUT /api/v1/tutorials/{tutorialId}/steps (ADMIN) -> body: { steps: [...] }
+// NEW: atomically replaces the FULL step list for a tutorial in one DB
+// transaction. Steps with an id are updated, steps with id=null are
+// created, and any existing step NOT included in the array is deleted.
+// Replaces the old create/update/delete-per-step save loop, which sent
+// up to ~2x the step count as separate HTTP requests and could leave the
+// tutorial in a half-saved state if one of those requests failed.
+export function replaceSteps(tutorialId, steps) {
+  return http
+    .put(`/tutorials/${tutorialId}/steps`, {
+      steps: steps.map((step) => ({
+        id: step.id ?? null,
+        stepNumber: step.stepNumber,
+        instruction: step.instruction,
+        imageUrl: step.imageUrl ?? null
+      }))
+    })
+    .then((res) => res.data)
+}
+
 // POST /api/v1/tutorial-steps/images (ADMIN) -> { imageUrl }
-// Uploads a single image file to Supabase Storage (via the backend) and
-// returns its public URL. Call this first, then pass the returned imageUrl
-// into createStep()/updateStep() above.
-//
-// IMPORTANT: our axios instance (http.js) sets a default
-// 'Content-Type: application/json' header on ALL requests. That default
-// silently overrides the multipart boundary the browser would normally
-// set for FormData, which made the backend reject the request with
-// "Current request is not a multipart request". Explicitly clearing the
-// header here (per-request) lets the browser set the correct
-// 'multipart/form-data; boundary=...' value instead.
 export function uploadStepImage(file) {
   const formData = new FormData()
   formData.append('file', file)

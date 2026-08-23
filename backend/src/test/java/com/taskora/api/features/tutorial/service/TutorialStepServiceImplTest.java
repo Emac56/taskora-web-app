@@ -12,6 +12,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -21,6 +22,8 @@ import com.taskora.api.common.exception.DuplicateStepNumberException;
 import com.taskora.api.common.exception.ResourceNotFoundException;
 import com.taskora.api.common.security.CurrentUserProvider;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialStepRequest;
+import com.taskora.api.features.tutorial.dto.request.ReplaceTutorialStepItem;      // ← BAGO
+import com.taskora.api.features.tutorial.dto.request.ReplaceTutorialStepRequest;  // ← BAGO
 import com.taskora.api.features.tutorial.dto.request.UpdateTutorialStepRequest;
 import com.taskora.api.features.tutorial.dto.response.TutorialStepResponse;
 import com.taskora.api.features.tutorial.entity.Tutorial;
@@ -280,7 +283,164 @@ class TutorialStepServiceImplTest {
                 () -> tutorialStepService.getAllByTutorialId(1L)
         );
     }
+// ---------- NEW: replaceAll (bulk atomic reorder) ----------
 
+@Test
+void shouldReorderTwoExistingStepsWithoutConflict() {
+    TutorialStep stepA = new TutorialStep();
+    stepA.setId(10L); stepA.setTutorial(tutorial); stepA.setStepNumber(1);
+    TutorialStep stepB = new TutorialStep();
+    stepB.setId(11L); stepB.setTutorial(tutorial); stepB.setStepNumber(2);
+
+    when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
+    when(tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(1L))
+            .thenReturn(List.of(stepA, stepB));
+    when(tutorialStepRepository.saveAllAndFlush(ArgumentMatchers.anyList()))
+            .thenAnswer(inv -> inv.getArgument(0));
+    when(tutorialStepRepository.saveAll(ArgumentMatchers.anyList()))
+            .thenAnswer(inv -> inv.getArgument(0));
+    when(tutorialStepMapper.toResponse(ArgumentMatchers.any())).thenReturn(response);
+
+    ReplaceTutorialStepItem itemA = new ReplaceTutorialStepItem();
+    itemA.setId(10L); itemA.setStepNumber(2); itemA.setInstruction("B");
+    ReplaceTutorialStepItem itemB = new ReplaceTutorialStepItem();
+    itemB.setId(11L); itemB.setStepNumber(1); itemB.setInstruction("A");
+
+    ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
+    req.setSteps(List.of(itemA, itemB));
+
+    // Must not throw — this is the exact swap that used to hit the
+    // "conflicts with existing data" error under the old N-request flow.
+    tutorialStepService.replaceAll(1L, req);
+
+    verify(tutorialStepRepository).saveAllAndFlush(ArgumentMatchers.anyList());
+    verify(tutorialStepRepository, never()).deleteAllByIdInBatch(ArgumentMatchers.anyList());
+}
+
+@Test
+void shouldCreateNewStepWhenPayloadItemHasNoId() {
+    // One existing step is kept as-is; the second payload item has no id,
+    // so it must go through the "create new step" branch (item.getId() ==
+    // null -> new TutorialStep() + setTutorial(tutorial)) — the exact
+    // branch SonarCloud flagged as uncovered.
+    TutorialStep stepA = new TutorialStep();
+    stepA.setId(10L); stepA.setTutorial(tutorial); stepA.setStepNumber(1);
+
+    when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
+    when(tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(1L))
+            .thenReturn(List.of(stepA));
+    when(tutorialStepRepository.saveAllAndFlush(ArgumentMatchers.anyList()))
+            .thenAnswer(inv -> inv.getArgument(0));
+    when(tutorialStepRepository.saveAll(ArgumentMatchers.anyList()))
+            .thenAnswer(inv -> inv.getArgument(0));
+    when(tutorialStepMapper.toResponse(ArgumentMatchers.any())).thenReturn(response);
+
+    ReplaceTutorialStepItem itemA = new ReplaceTutorialStepItem();
+    itemA.setId(10L); itemA.setStepNumber(1); itemA.setInstruction("A");
+
+    ReplaceTutorialStepItem itemNew = new ReplaceTutorialStepItem();
+    itemNew.setId(null);
+    itemNew.setStepNumber(2);
+    itemNew.setInstruction("New step");
+    itemNew.setImageUrl("https://example.com/new.png");
+
+    ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
+    req.setSteps(List.of(itemA, itemNew));
+
+    tutorialStepService.replaceAll(1L, req);
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<TutorialStep>> captor = ArgumentCaptor.forClass(List.class);
+    verify(tutorialStepRepository).saveAll(captor.capture());
+
+    TutorialStep created = captor.getValue().stream()
+            .filter(step -> step.getId() == null)
+            .findFirst()
+            .orElseThrow();
+
+    assertEquals(tutorial, created.getTutorial());
+    assertEquals(2, created.getStepNumber());
+    assertEquals("New step", created.getInstruction());
+    assertEquals("https://example.com/new.png", created.getImageUrl());
+}
+
+@Test
+void shouldDeleteStepsOmittedFromThePayload() {
+    TutorialStep stepA = new TutorialStep();
+    stepA.setId(10L); stepA.setTutorial(tutorial); stepA.setStepNumber(1);
+    TutorialStep stepB = new TutorialStep();
+    stepB.setId(11L); stepB.setTutorial(tutorial); stepB.setStepNumber(2);
+
+    when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
+    when(tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(1L))
+            .thenReturn(List.of(stepA, stepB));
+    when(tutorialStepRepository.saveAllAndFlush(ArgumentMatchers.anyList()))
+            .thenAnswer(inv -> inv.getArgument(0));
+    when(tutorialStepRepository.saveAll(ArgumentMatchers.anyList()))
+            .thenAnswer(inv -> inv.getArgument(0));
+    when(tutorialStepMapper.toResponse(ArgumentMatchers.any())).thenReturn(response);
+
+    // Only step A survives in the payload; step B should be deleted.
+    ReplaceTutorialStepItem itemA = new ReplaceTutorialStepItem();
+    itemA.setId(10L); itemA.setStepNumber(1); itemA.setInstruction("A");
+
+    ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
+    req.setSteps(List.of(itemA));
+
+    tutorialStepService.replaceAll(1L, req);
+
+    verify(tutorialStepRepository).deleteAllByIdInBatch(List.of(11L));
+}
+
+@Test
+void shouldRejectDuplicateStepNumbersInPayload() {
+    ReplaceTutorialStepItem itemA = new ReplaceTutorialStepItem();
+    itemA.setId(10L); itemA.setStepNumber(1); itemA.setInstruction("A");
+    ReplaceTutorialStepItem itemB = new ReplaceTutorialStepItem();
+    itemB.setId(11L); itemB.setStepNumber(1); itemB.setInstruction("B");
+
+    ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
+    req.setSteps(List.of(itemA, itemB));
+
+    when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
+
+    assertThrows(DuplicateStepNumberException.class,
+            () -> tutorialStepService.replaceAll(1L, req));
+
+    verify(tutorialStepRepository, never())
+            .findAllByTutorialIdOrderByStepNumberAsc(ArgumentMatchers.anyLong());
+}
+
+@Test
+void shouldRejectStepIdThatDoesNotBelongToTutorial() {
+    when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
+    when(tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(1L))
+            .thenReturn(List.of());
+
+    ReplaceTutorialStepItem foreignItem = new ReplaceTutorialStepItem();
+    foreignItem.setId(999L); foreignItem.setStepNumber(1); foreignItem.setInstruction("Hijack");
+
+    ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
+    req.setSteps(List.of(foreignItem));
+
+    assertThrows(ResourceNotFoundException.class,
+            () -> tutorialStepService.replaceAll(1L, req));
+}
+
+@Test
+void shouldThrowWhenReplacingStepsForNonExistingTutorial() {
+    when(tutorialRepository.findById(1L)).thenReturn(Optional.empty());
+
+    ReplaceTutorialStepItem item = new ReplaceTutorialStepItem();
+    item.setStepNumber(1); item.setInstruction("A");
+
+    ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
+    req.setSteps(List.of(item));
+
+    assertThrows(ResourceNotFoundException.class,
+            () -> tutorialStepService.replaceAll(1L, req));
+            }
+    
     @Test
     void shouldUpdateTutorialStep() {
         when(tutorialStepRepository.findById(10L))
@@ -359,6 +519,7 @@ class TutorialStepServiceImplTest {
         verify(tutorialRepository).findById(1L);
     }
 
+    
     @Test
     void shouldReturnTutorialStepWhenCallerIsAdminAndTutorialIsDraft() {
         Tutorial draftTutorial = new Tutorial();

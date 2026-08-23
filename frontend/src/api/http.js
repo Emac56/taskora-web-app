@@ -6,38 +6,16 @@ import axios from 'axios'
 const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1',
   withCredentials: true,
+  // Frontend (localhost:5173) and backend (localhost:8080) are different
+  // origins (different port), so axios treats this as cross-origin and
+  // won't attach the XSRF-TOKEN cookie as an X-XSRF-TOKEN header by default
+  // (security default since axios 1.6.0 / CVE-2023-45857). Safe to force
+  // this on here since baseURL is fixed to our own backend only, never an
+  // arbitrary host.
+  withXSRFToken: true,
   headers: {
     'Content-Type': 'application/json'
   }
-})
-
-// In-memory only, refreshed from every response (see interceptor below).
-// A page reload just goes back to null and re-fills on the next request
-// instead of going stale.
-let csrfToken = null
-
-// We used to rely on axios's built-in `withXSRFToken`, which reads the
-// XSRF-TOKEN cookie via document.cookie and mirrors it into the
-// X-XSRF-TOKEN header. That only works when frontend and backend share a
-// domain. In production, frontend (Vercel) and backend (Render) are
-// different domains — cookies are scoped to the domain that set them, so
-// this page's JS can never see that cookie no matter what CORS allows.
-// The backend mirrors the token onto an X-XSRF-TOKEN *response* header
-// instead (see CsrfCookieFilter), which we capture here and re-attach
-// ourselves on the next request.
-http.interceptors.response.use((response) => {
-  const token = response.headers['x-xsrf-token']
-  if (token) {
-    csrfToken = token
-  }
-  return response
-})
-
-http.interceptors.request.use((config) => {
-  if (csrfToken) {
-    config.headers['X-XSRF-TOKEN'] = csrfToken
-  }
-  return config
 })
 
 // Extract the backend's { success, message } error shape (ApiErrorResponse)
@@ -61,4 +39,5 @@ http.interceptors.response.use(
 )
 
 export default http
+
 

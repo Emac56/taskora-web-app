@@ -53,13 +53,6 @@ public class SecurityConfig {
                 List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(
                 List.of("Content-Type", "Authorization", "X-XSRF-TOKEN"));
-        // Frontend (Vercel) and backend (Render) are different domains, so
-        // JS on the frontend can never read the XSRF-TOKEN cookie directly
-        // (cookies are scoped to the domain that set them). We hand the
-        // current token to the frontend via this response header instead
-        // (see CsrfCookieFilter) — custom response headers aren't visible
-        // to cross-origin JS unless explicitly exposed here.
-        configuration.setExposedHeaders(List.of("X-XSRF-TOKEN"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
@@ -75,21 +68,10 @@ public class SecurityConfig {
             SecurityContextRepository securityContextRepository,
             CorsConfigurationSource corsConfigurationSource) throws Exception {
 
-        CookieCsrfTokenRepository csrfTokenRepository =
-                CookieCsrfTokenRepository.withHttpOnlyFalse();
-        // Same cross-site reasoning as the JSESSIONID cookie in
-        // application-prod.properties: frontend and backend are on
-        // different registrable domains, so this cookie needs
-        // SameSite=None; Secure just to be sent back on the request at
-        // all. (Browsers treat localhost as a secure context, so this
-        // doesn't break local dev over plain http.)
-        csrfTokenRepository.setCookieCustomizer(
-                cookie -> cookie.sameSite("None").secure(true));
-
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource))
             .csrf(csrf -> csrf
-                    .csrfTokenRepository(csrfTokenRepository)
+                    .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                     .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
                     // No session exists yet at login time, so there's nothing
                     // for the CSRF cookie to protect on this specific request.

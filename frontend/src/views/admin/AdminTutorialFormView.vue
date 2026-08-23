@@ -5,12 +5,7 @@ import AdminLayout from '../../layouts/AdminLayout.vue'
 import BaseButton from '../../components/ui/BaseButton.vue'
 import StepEditorRow from '../../features/tutorials/components/StepEditorRow.vue'
 import { getTutorialById, createTutorial, updateTutorial } from '../../api/tutorials.api'
-import {
-  getStepsByTutorialId,
-  createStep,
-  updateStep,
-  deleteStep
-} from '../../api/tutorialSteps.api'
+import { getStepsByTutorialId, replaceSteps } from '../../api/tutorialSteps.api'
 
 const props = defineProps({
   id: { type: [String, Number], default: null }
@@ -23,7 +18,6 @@ const title = ref('')
 const description = ref('')
 const status = ref('DRAFT')
 const steps = ref([])
-const removedStepIds = ref([])
 
 const loading = ref(isEditMode.value)
 const saving = ref(false)
@@ -40,8 +34,9 @@ function addStep() {
 }
 
 function removeStep(index) {
-  const [removed] = steps.value.splice(index, 1)
-  if (removed.id) removedStepIds.value.push(removed.id)
+  // No need to track removed ids anymore — the backend diffs the
+  // payload against the DB and deletes whatever is missing, atomically.
+  steps.value.splice(index, 1)
 }
 
 function moveStep(index, direction) {
@@ -92,49 +87,17 @@ async function handleSubmit() {
       ? (await updateTutorial(props.id, payload)).id
       : (await createTutorial(payload)).id
 
-    if (removedStepIds.value.length > 0) {
-      const idsToDelete = [...removedStepIds.value]
-      const results = await Promise.allSettled(idsToDelete.map((stepId) => deleteStep(stepId)))
+    // ONE request for the whole step list — create/update/delete/reorder
+    // all committed atomically by the backend. No more sequential
+    // per-step loop, no more partial-save state.
+    const stepsPayload = steps.value.map((step, index) => ({
+      id: step.id,
+      stepNumber: index + 1,
+      instruction: step.instruction,
+      imageUrl: step.imageUrl
+    }))
 
-      const stillPending = []
-      let firstRealError = null
-      results.forEach((result, index) => {
-        if (result.status === 'rejected' && result.reason?.response?.status !== 404) {
-          stillPending.push(idsToDelete[index])
-          firstRealError ??= result.reason
-        }
-      })
-
-      removedStepIds.value = stillPending
-      if (firstRealError) throw firstRealError
-    }
-
-    const TEMP_STEP_NUMBER_OFFSET = 1_000_000
-    const targets = steps.value.map((step, index) => ({ step, stepNumber: index + 1 }))
-    const existingTargets = targets.filter((t) => t.step.id)
-
-    // Pass 1: move all existing steps to guaranteed-unique temp numbers first,
-    // so no two rows can ever collide while final numbers get assigned below.
-    for (let i = 0; i < existingTargets.length; i += 1) {
-      const { step } = existingTargets[i]
-      await updateStep(step.id, {
-        stepNumber: TEMP_STEP_NUMBER_OFFSET + i,
-        instruction: step.instruction,
-        imageUrl: step.imageUrl
-      })
-    }
-
-    // Pass 2: write the real final numbers.
-    for (const { step, stepNumber } of targets) {
-      const stepPayload = { stepNumber, instruction: step.instruction, imageUrl: step.imageUrl }
-
-      if (step.id) {
-        await updateStep(step.id, stepPayload)
-      } else {
-        const created = await createStep(tutorialId, stepPayload)
-        step.id = created.id
-      }
-    }
+    await replaceSteps(tutorialId, stepsPayload)
 
     router.push({ name: 'admin-tutorials-list' })
   } catch (error) {

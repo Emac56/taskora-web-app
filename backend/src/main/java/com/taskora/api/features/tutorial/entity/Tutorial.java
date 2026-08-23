@@ -4,6 +4,7 @@ import com.taskora.api.common.entity.BaseEntity;
 import com.taskora.api.features.tutorial.enums.TutorialStatus;
 
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
 import jakarta.persistence.OneToMany;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,6 +25,7 @@ public class Tutorial extends BaseEntity {
 
     private String title;
 
+    @Column(length = 5000)
     private String description;
 
     @Enumerated(EnumType.STRING)
