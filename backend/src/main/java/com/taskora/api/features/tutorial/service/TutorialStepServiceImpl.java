@@ -203,14 +203,7 @@ public class TutorialStepServiceImpl implements TutorialStepService {
         Map<Long, TutorialStep> existingById = existingSteps.stream()
                 .collect(Collectors.toMap(TutorialStep::getId, Function.identity()));
 
-        // Security: an id in the payload must belong to THIS tutorial —
-        // never trust a client-supplied id blindly.
-        for (ReplaceTutorialStepItem item : incoming) {
-            if (item.getId() != null && !existingById.containsKey(item.getId())) {
-                throw new ResourceNotFoundException(
-                        "Step " + item.getId() + " does not belong to this tutorial.");
-            }
-        }
+        validateIncomingIdsBelongToTutorial(incoming, existingById);
 
         Set<Long> incomingIds = incoming.stream()
                 .map(ReplaceTutorialStepItem::getId)
@@ -249,6 +242,48 @@ public class TutorialStepServiceImpl implements TutorialStepService {
         // Kept steps whose imageUrl is being replaced have their previous
         // value captured here, before the overwrite below.
         List<String> replacedImageUrls = new ArrayList<>();
+        List<TutorialStep> toSave =
+                buildStepsToSave(incoming, existingById, tutorial, replacedImageUrls);
+
+        List<TutorialStep> saved = tutorialStepRepository.saveAll(toSave);
+
+        List<String> imageUrlsToCleanUp = new ArrayList<>(replacedImageUrls);
+        imageUrlsToCleanUp.addAll(
+                stepsToDelete.stream()
+                        .map(TutorialStep::getImageUrl)
+                        .filter(Objects::nonNull)
+                        .toList());
+        cleanUpAfterCommit(imageUrlsToCleanUp);
+
+        return saved.stream()
+                .sorted(Comparator.comparing(TutorialStep::getStepNumber))
+                .map(tutorialStepMapper::toResponse)
+                .toList();
+    }
+
+    // Security: an id in the payload must belong to THIS tutorial —
+    // never trust a client-supplied id blindly.
+    private void validateIncomingIdsBelongToTutorial(
+            List<ReplaceTutorialStepItem> incoming,
+            Map<Long, TutorialStep> existingById) {
+
+        for (ReplaceTutorialStepItem item : incoming) {
+            if (item.getId() != null && !existingById.containsKey(item.getId())) {
+                throw new ResourceNotFoundException(
+                        "Step " + item.getId() + " does not belong to this tutorial.");
+            }
+        }
+    }
+
+    // Builds the final entities to persist: reuses kept steps (by id) and
+    // creates new ones for items with no id. For kept steps whose imageUrl
+    // is being replaced, the previous value is captured into
+    // replacedImageUrls before it gets overwritten below.
+    private List<TutorialStep> buildStepsToSave(
+            List<ReplaceTutorialStepItem> incoming,
+            Map<Long, TutorialStep> existingById,
+            Tutorial tutorial,
+            List<String> replacedImageUrls) {
 
         List<TutorialStep> toSave = new ArrayList<>();
         for (ReplaceTutorialStepItem item : incoming) {
@@ -270,21 +305,7 @@ public class TutorialStepServiceImpl implements TutorialStepService {
             step.setImageUrl(item.getImageUrl());
             toSave.add(step);
         }
-
-        List<TutorialStep> saved = tutorialStepRepository.saveAll(toSave);
-
-        List<String> imageUrlsToCleanUp = new ArrayList<>(replacedImageUrls);
-        stepsToDelete.forEach(step -> {
-            if (step.getImageUrl() != null) {
-                imageUrlsToCleanUp.add(step.getImageUrl());
-            }
-        });
-        cleanUpAfterCommit(imageUrlsToCleanUp);
-
-        return saved.stream()
-                .sorted(Comparator.comparing(TutorialStep::getStepNumber))
-                .map(tutorialStepMapper::toResponse)
-                .toList();
+        return toSave;
     }
 
     /**
