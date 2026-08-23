@@ -2,6 +2,7 @@ package com.taskora.api.features.tutorial.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -21,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.taskora.api.common.exception.DuplicateStepNumberException;
 import com.taskora.api.common.exception.ResourceNotFoundException;
 import com.taskora.api.common.security.CurrentUserProvider;
+import com.taskora.api.common.storage.SupabaseStorageClient;   // ← BAGO
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialStepRequest;
 import com.taskora.api.features.tutorial.dto.request.ReplaceTutorialStepItem;      // ← BAGO
 import com.taskora.api.features.tutorial.dto.request.ReplaceTutorialStepRequest;  // ← BAGO
@@ -47,6 +49,9 @@ class TutorialStepServiceImplTest {
 
     @Mock
     private CurrentUserProvider currentUserProvider;
+
+    @Mock
+    private SupabaseStorageClient supabaseStorageClient; // ← BAGO
 
     @InjectMocks
     private TutorialStepServiceImpl tutorialStepService;
@@ -194,6 +199,57 @@ class TutorialStepServiceImplTest {
         verify(tutorialStepRepository).save(tutorialStep);
     }
 
+    // ---------- NEW: storage cleanup on update() (BE-151) ----------
+
+    @Test
+    void shouldDeletePreviousImageFromStorageWhenImageUrlChangesOnUpdate() {
+        UpdateTutorialStepRequest requestWithNewImage = new UpdateTutorialStepRequest();
+        requestWithNewImage.setStepNumber(1);
+        requestWithNewImage.setInstruction("Updated instruction.");
+        requestWithNewImage.setImageUrl("https://example.com/new-image.png");
+
+        when(tutorialStepRepository.findById(10L))
+                .thenReturn(Optional.of(tutorialStep));
+        when(tutorialStepRepository.existsByTutorialIdAndStepNumberAndIdNot(1L, 1, 10L))
+                .thenReturn(false);
+
+        // tutorialStepMapper is a mock elsewhere in this class (a no-op on
+        // updateEntity), so here we simulate what the real mapper does:
+        // overwrite imageUrl on the entity being updated.
+        doAnswer(invocation -> {
+            tutorialStep.setImageUrl("https://example.com/new-image.png");
+            return null;
+        }).when(tutorialStepMapper).updateEntity(requestWithNewImage, tutorialStep);
+
+        when(tutorialStepRepository.save(tutorialStep))
+                .thenReturn(tutorialStep);
+        when(tutorialStepMapper.toResponse(tutorialStep))
+                .thenReturn(response);
+
+        tutorialStepService.update(10L, requestWithNewImage);
+
+        verify(supabaseStorageClient).delete("https://example.com/image.png");
+    }
+
+    @Test
+    void shouldNotDeleteFromStorageWhenImageUrlUnchangedOnUpdate() {
+        // tutorialStepMapper.updateEntity() is unstubbed here (no-op), so
+        // tutorialStep.getImageUrl() is identical before and after — the
+        // exact "nothing actually changed" case the diff-check must skip.
+        when(tutorialStepRepository.findById(10L))
+                .thenReturn(Optional.of(tutorialStep));
+        when(tutorialStepRepository.existsByTutorialIdAndStepNumberAndIdNot(1L, 2, 10L))
+                .thenReturn(false);
+        when(tutorialStepRepository.save(tutorialStep))
+                .thenReturn(tutorialStep);
+        when(tutorialStepMapper.toResponse(tutorialStep))
+                .thenReturn(response);
+
+        tutorialStepService.update(10L, updateRequest);
+
+        verify(supabaseStorageClient, never()).delete(ArgumentMatchers.any());
+    }
+
     // --------------------------------------------------------------------
 
     @Test
@@ -283,164 +339,260 @@ class TutorialStepServiceImplTest {
                 () -> tutorialStepService.getAllByTutorialId(1L)
         );
     }
-// ---------- NEW: replaceAll (bulk atomic reorder) ----------
 
-@Test
-void shouldReorderTwoExistingStepsWithoutConflict() {
-    TutorialStep stepA = new TutorialStep();
-    stepA.setId(10L); stepA.setTutorial(tutorial); stepA.setStepNumber(1);
-    TutorialStep stepB = new TutorialStep();
-    stepB.setId(11L); stepB.setTutorial(tutorial); stepB.setStepNumber(2);
+    // ---------- NEW: replaceAll (bulk atomic reorder) ----------
 
-    when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
-    when(tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(1L))
-            .thenReturn(List.of(stepA, stepB));
-    when(tutorialStepRepository.saveAllAndFlush(ArgumentMatchers.anyList()))
-            .thenAnswer(inv -> inv.getArgument(0));
-    when(tutorialStepRepository.saveAll(ArgumentMatchers.anyList()))
-            .thenAnswer(inv -> inv.getArgument(0));
-    when(tutorialStepMapper.toResponse(ArgumentMatchers.any())).thenReturn(response);
+    @Test
+    void shouldReorderTwoExistingStepsWithoutConflict() {
+        TutorialStep stepA = new TutorialStep();
+        stepA.setId(10L); stepA.setTutorial(tutorial); stepA.setStepNumber(1);
+        TutorialStep stepB = new TutorialStep();
+        stepB.setId(11L); stepB.setTutorial(tutorial); stepB.setStepNumber(2);
 
-    ReplaceTutorialStepItem itemA = new ReplaceTutorialStepItem();
-    itemA.setId(10L); itemA.setStepNumber(2); itemA.setInstruction("B");
-    ReplaceTutorialStepItem itemB = new ReplaceTutorialStepItem();
-    itemB.setId(11L); itemB.setStepNumber(1); itemB.setInstruction("A");
+        when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
+        when(tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(1L))
+                .thenReturn(List.of(stepA, stepB));
+        when(tutorialStepRepository.saveAllAndFlush(ArgumentMatchers.anyList()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(tutorialStepRepository.saveAll(ArgumentMatchers.anyList()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(tutorialStepMapper.toResponse(ArgumentMatchers.any())).thenReturn(response);
 
-    ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
-    req.setSteps(List.of(itemA, itemB));
+        ReplaceTutorialStepItem itemA = new ReplaceTutorialStepItem();
+        itemA.setId(10L); itemA.setStepNumber(2); itemA.setInstruction("B");
+        ReplaceTutorialStepItem itemB = new ReplaceTutorialStepItem();
+        itemB.setId(11L); itemB.setStepNumber(1); itemB.setInstruction("A");
 
-    // Must not throw — this is the exact swap that used to hit the
-    // "conflicts with existing data" error under the old N-request flow.
-    tutorialStepService.replaceAll(1L, req);
+        ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
+        req.setSteps(List.of(itemA, itemB));
 
-    verify(tutorialStepRepository).saveAllAndFlush(ArgumentMatchers.anyList());
-    verify(tutorialStepRepository, never()).deleteAllByIdInBatch(ArgumentMatchers.anyList());
-}
+        // Must not throw — this is the exact swap that used to hit the
+        // "conflicts with existing data" error under the old N-request flow.
+        tutorialStepService.replaceAll(1L, req);
 
-@Test
-void shouldCreateNewStepWhenPayloadItemHasNoId() {
-    // One existing step is kept as-is; the second payload item has no id,
-    // so it must go through the "create new step" branch (item.getId() ==
-    // null -> new TutorialStep() + setTutorial(tutorial)) — the exact
-    // branch SonarCloud flagged as uncovered.
-    TutorialStep stepA = new TutorialStep();
-    stepA.setId(10L); stepA.setTutorial(tutorial); stepA.setStepNumber(1);
+        verify(tutorialStepRepository).saveAllAndFlush(ArgumentMatchers.anyList());
+        verify(tutorialStepRepository, never()).deleteAllByIdInBatch(ArgumentMatchers.anyList());
+    }
 
-    when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
-    when(tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(1L))
-            .thenReturn(List.of(stepA));
-    when(tutorialStepRepository.saveAllAndFlush(ArgumentMatchers.anyList()))
-            .thenAnswer(inv -> inv.getArgument(0));
-    when(tutorialStepRepository.saveAll(ArgumentMatchers.anyList()))
-            .thenAnswer(inv -> inv.getArgument(0));
-    when(tutorialStepMapper.toResponse(ArgumentMatchers.any())).thenReturn(response);
+    @Test
+    void shouldCreateNewStepWhenPayloadItemHasNoId() {
+        // One existing step is kept as-is; the second payload item has no id,
+        // so it must go through the "create new step" branch (item.getId() ==
+        // null -> new TutorialStep() + setTutorial(tutorial)) — the exact
+        // branch SonarCloud flagged as uncovered.
+        TutorialStep stepA = new TutorialStep();
+        stepA.setId(10L); stepA.setTutorial(tutorial); stepA.setStepNumber(1);
 
-    ReplaceTutorialStepItem itemA = new ReplaceTutorialStepItem();
-    itemA.setId(10L); itemA.setStepNumber(1); itemA.setInstruction("A");
+        when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
+        when(tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(1L))
+                .thenReturn(List.of(stepA));
+        when(tutorialStepRepository.saveAllAndFlush(ArgumentMatchers.anyList()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(tutorialStepRepository.saveAll(ArgumentMatchers.anyList()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(tutorialStepMapper.toResponse(ArgumentMatchers.any())).thenReturn(response);
 
-    ReplaceTutorialStepItem itemNew = new ReplaceTutorialStepItem();
-    itemNew.setId(null);
-    itemNew.setStepNumber(2);
-    itemNew.setInstruction("New step");
-    itemNew.setImageUrl("https://example.com/new.png");
+        ReplaceTutorialStepItem itemA = new ReplaceTutorialStepItem();
+        itemA.setId(10L); itemA.setStepNumber(1); itemA.setInstruction("A");
 
-    ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
-    req.setSteps(List.of(itemA, itemNew));
+        ReplaceTutorialStepItem itemNew = new ReplaceTutorialStepItem();
+        itemNew.setId(null);
+        itemNew.setStepNumber(2);
+        itemNew.setInstruction("New step");
+        itemNew.setImageUrl("https://example.com/new.png");
 
-    tutorialStepService.replaceAll(1L, req);
+        ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
+        req.setSteps(List.of(itemA, itemNew));
 
-    @SuppressWarnings("unchecked")
-    ArgumentCaptor<List<TutorialStep>> captor = ArgumentCaptor.forClass(List.class);
-    verify(tutorialStepRepository).saveAll(captor.capture());
+        tutorialStepService.replaceAll(1L, req);
 
-    TutorialStep created = captor.getValue().stream()
-            .filter(step -> step.getId() == null)
-            .findFirst()
-            .orElseThrow();
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<TutorialStep>> captor = ArgumentCaptor.forClass(List.class);
+        verify(tutorialStepRepository).saveAll(captor.capture());
 
-    assertEquals(tutorial, created.getTutorial());
-    assertEquals(2, created.getStepNumber());
-    assertEquals("New step", created.getInstruction());
-    assertEquals("https://example.com/new.png", created.getImageUrl());
-}
+        TutorialStep created = captor.getValue().stream()
+                .filter(step -> step.getId() == null)
+                .findFirst()
+                .orElseThrow();
 
-@Test
-void shouldDeleteStepsOmittedFromThePayload() {
-    TutorialStep stepA = new TutorialStep();
-    stepA.setId(10L); stepA.setTutorial(tutorial); stepA.setStepNumber(1);
-    TutorialStep stepB = new TutorialStep();
-    stepB.setId(11L); stepB.setTutorial(tutorial); stepB.setStepNumber(2);
+        assertEquals(tutorial, created.getTutorial());
+        assertEquals(2, created.getStepNumber());
+        assertEquals("New step", created.getInstruction());
+        assertEquals("https://example.com/new.png", created.getImageUrl());
+    }
 
-    when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
-    when(tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(1L))
-            .thenReturn(List.of(stepA, stepB));
-    when(tutorialStepRepository.saveAllAndFlush(ArgumentMatchers.anyList()))
-            .thenAnswer(inv -> inv.getArgument(0));
-    when(tutorialStepRepository.saveAll(ArgumentMatchers.anyList()))
-            .thenAnswer(inv -> inv.getArgument(0));
-    when(tutorialStepMapper.toResponse(ArgumentMatchers.any())).thenReturn(response);
+    @Test
+    void shouldDeleteStepsOmittedFromThePayload() {
+        TutorialStep stepA = new TutorialStep();
+        stepA.setId(10L); stepA.setTutorial(tutorial); stepA.setStepNumber(1);
+        TutorialStep stepB = new TutorialStep();
+        stepB.setId(11L); stepB.setTutorial(tutorial); stepB.setStepNumber(2);
 
-    // Only step A survives in the payload; step B should be deleted.
-    ReplaceTutorialStepItem itemA = new ReplaceTutorialStepItem();
-    itemA.setId(10L); itemA.setStepNumber(1); itemA.setInstruction("A");
+        when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
+        when(tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(1L))
+                .thenReturn(List.of(stepA, stepB));
+        when(tutorialStepRepository.saveAllAndFlush(ArgumentMatchers.anyList()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(tutorialStepRepository.saveAll(ArgumentMatchers.anyList()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(tutorialStepMapper.toResponse(ArgumentMatchers.any())).thenReturn(response);
 
-    ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
-    req.setSteps(List.of(itemA));
+        // Only step A survives in the payload; step B should be deleted.
+        ReplaceTutorialStepItem itemA = new ReplaceTutorialStepItem();
+        itemA.setId(10L); itemA.setStepNumber(1); itemA.setInstruction("A");
 
-    tutorialStepService.replaceAll(1L, req);
+        ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
+        req.setSteps(List.of(itemA));
 
-    verify(tutorialStepRepository).deleteAllByIdInBatch(List.of(11L));
-}
+        tutorialStepService.replaceAll(1L, req);
 
-@Test
-void shouldRejectDuplicateStepNumbersInPayload() {
-    ReplaceTutorialStepItem itemA = new ReplaceTutorialStepItem();
-    itemA.setId(10L); itemA.setStepNumber(1); itemA.setInstruction("A");
-    ReplaceTutorialStepItem itemB = new ReplaceTutorialStepItem();
-    itemB.setId(11L); itemB.setStepNumber(1); itemB.setInstruction("B");
+        verify(tutorialStepRepository).deleteAllByIdInBatch(List.of(11L));
+    }
 
-    ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
-    req.setSteps(List.of(itemA, itemB));
+    // ---------- NEW: storage cleanup on replaceAll() (BE-151) ----------
+    // The ticket only named delete()/update(), but replaceAll() overwrites
+    // and drops imageUrls the exact same way and is the endpoint the
+    // frontend's bulk step editor actually calls — so it leaks the same
+    // orphaned files if left alone.
 
-    when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
+    @Test
+    void shouldDeleteRemovedStepImageFromStorageWhenOmittedFromPayload() {
+        TutorialStep stepA = new TutorialStep();
+        stepA.setId(10L); stepA.setTutorial(tutorial); stepA.setStepNumber(1);
+        TutorialStep stepB = new TutorialStep();
+        stepB.setId(11L); stepB.setTutorial(tutorial); stepB.setStepNumber(2);
+        stepB.setImageUrl("https://example.com/step-b.png");
 
-    assertThrows(DuplicateStepNumberException.class,
-            () -> tutorialStepService.replaceAll(1L, req));
+        when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
+        when(tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(1L))
+                .thenReturn(List.of(stepA, stepB));
+        when(tutorialStepRepository.saveAllAndFlush(ArgumentMatchers.anyList()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(tutorialStepRepository.saveAll(ArgumentMatchers.anyList()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(tutorialStepMapper.toResponse(ArgumentMatchers.any())).thenReturn(response);
 
-    verify(tutorialStepRepository, never())
-            .findAllByTutorialIdOrderByStepNumberAsc(ArgumentMatchers.anyLong());
-}
+        ReplaceTutorialStepItem itemA = new ReplaceTutorialStepItem();
+        itemA.setId(10L); itemA.setStepNumber(1); itemA.setInstruction("A");
 
-@Test
-void shouldRejectStepIdThatDoesNotBelongToTutorial() {
-    when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
-    when(tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(1L))
-            .thenReturn(List.of());
+        ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
+        req.setSteps(List.of(itemA));
 
-    ReplaceTutorialStepItem foreignItem = new ReplaceTutorialStepItem();
-    foreignItem.setId(999L); foreignItem.setStepNumber(1); foreignItem.setInstruction("Hijack");
+        tutorialStepService.replaceAll(1L, req);
 
-    ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
-    req.setSteps(List.of(foreignItem));
+        verify(tutorialStepRepository).deleteAllByIdInBatch(List.of(11L));
+        verify(supabaseStorageClient).delete("https://example.com/step-b.png");
+    }
 
-    assertThrows(ResourceNotFoundException.class,
-            () -> tutorialStepService.replaceAll(1L, req));
-}
+    @Test
+    void shouldDeletePreviousImageFromStorageWhenKeptStepImageUrlChanges() {
+        TutorialStep stepA = new TutorialStep();
+        stepA.setId(10L); stepA.setTutorial(tutorial); stepA.setStepNumber(1);
+        stepA.setImageUrl("https://example.com/old.png");
 
-@Test
-void shouldThrowWhenReplacingStepsForNonExistingTutorial() {
-    when(tutorialRepository.findById(1L)).thenReturn(Optional.empty());
+        when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
+        when(tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(1L))
+                .thenReturn(List.of(stepA));
+        when(tutorialStepRepository.saveAllAndFlush(ArgumentMatchers.anyList()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(tutorialStepRepository.saveAll(ArgumentMatchers.anyList()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(tutorialStepMapper.toResponse(ArgumentMatchers.any())).thenReturn(response);
 
-    ReplaceTutorialStepItem item = new ReplaceTutorialStepItem();
-    item.setStepNumber(1); item.setInstruction("A");
+        ReplaceTutorialStepItem itemA = new ReplaceTutorialStepItem();
+        itemA.setId(10L);
+        itemA.setStepNumber(1);
+        itemA.setInstruction("A");
+        itemA.setImageUrl("https://example.com/new.png");
 
-    ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
-    req.setSteps(List.of(item));
+        ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
+        req.setSteps(List.of(itemA));
 
-    assertThrows(ResourceNotFoundException.class,
-            () -> tutorialStepService.replaceAll(1L, req));
-            }
-    
+        tutorialStepService.replaceAll(1L, req);
+
+        verify(supabaseStorageClient).delete("https://example.com/old.png");
+    }
+
+    @Test
+    void shouldNotDeleteFromStorageWhenKeptStepImageUrlUnchanged() {
+        TutorialStep stepA = new TutorialStep();
+        stepA.setId(10L); stepA.setTutorial(tutorial); stepA.setStepNumber(1);
+        stepA.setImageUrl("https://example.com/same.png");
+
+        when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
+        when(tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(1L))
+                .thenReturn(List.of(stepA));
+        when(tutorialStepRepository.saveAllAndFlush(ArgumentMatchers.anyList()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(tutorialStepRepository.saveAll(ArgumentMatchers.anyList()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(tutorialStepMapper.toResponse(ArgumentMatchers.any())).thenReturn(response);
+
+        ReplaceTutorialStepItem itemA = new ReplaceTutorialStepItem();
+        itemA.setId(10L);
+        itemA.setStepNumber(1);
+        itemA.setInstruction("A");
+        itemA.setImageUrl("https://example.com/same.png");
+
+        ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
+        req.setSteps(List.of(itemA));
+
+        tutorialStepService.replaceAll(1L, req);
+
+        verify(supabaseStorageClient, never()).delete(ArgumentMatchers.any());
+    }
+
+    // --------------------------------------------------------------------
+
+    @Test
+    void shouldRejectDuplicateStepNumbersInPayload() {
+        ReplaceTutorialStepItem itemA = new ReplaceTutorialStepItem();
+        itemA.setId(10L); itemA.setStepNumber(1); itemA.setInstruction("A");
+        ReplaceTutorialStepItem itemB = new ReplaceTutorialStepItem();
+        itemB.setId(11L); itemB.setStepNumber(1); itemB.setInstruction("B");
+
+        ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
+        req.setSteps(List.of(itemA, itemB));
+
+        when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
+
+        assertThrows(DuplicateStepNumberException.class,
+                () -> tutorialStepService.replaceAll(1L, req));
+
+        verify(tutorialStepRepository, never())
+                .findAllByTutorialIdOrderByStepNumberAsc(ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void shouldRejectStepIdThatDoesNotBelongToTutorial() {
+        when(tutorialRepository.findById(1L)).thenReturn(Optional.of(tutorial));
+        when(tutorialStepRepository.findAllByTutorialIdOrderByStepNumberAsc(1L))
+                .thenReturn(List.of());
+
+        ReplaceTutorialStepItem foreignItem = new ReplaceTutorialStepItem();
+        foreignItem.setId(999L); foreignItem.setStepNumber(1); foreignItem.setInstruction("Hijack");
+
+        ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
+        req.setSteps(List.of(foreignItem));
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> tutorialStepService.replaceAll(1L, req));
+    }
+
+    @Test
+    void shouldThrowWhenReplacingStepsForNonExistingTutorial() {
+        when(tutorialRepository.findById(1L)).thenReturn(Optional.empty());
+
+        ReplaceTutorialStepItem item = new ReplaceTutorialStepItem();
+        item.setStepNumber(1); item.setInstruction("A");
+
+        ReplaceTutorialStepRequest req = new ReplaceTutorialStepRequest();
+        req.setSteps(List.of(item));
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> tutorialStepService.replaceAll(1L, req));
+    }
+
     @Test
     void shouldUpdateTutorialStep() {
         when(tutorialStepRepository.findById(10L))
@@ -482,28 +634,52 @@ void shouldThrowWhenReplacingStepsForNonExistingTutorial() {
         verify(tutorialStepRepository).findById(10L);
     }
 
+    // ---------- delete() — updated for BE-151 (now loads the entity to
+    // read its imageUrl before removing the row, instead of existsById) ----------
+
     @Test
     void shouldDeleteTutorialStep() {
-        when(tutorialStepRepository.existsById(10L))
-                .thenReturn(true);
+        when(tutorialStepRepository.findById(10L))
+                .thenReturn(Optional.of(tutorialStep));
 
         tutorialStepService.delete(10L);
 
-        verify(tutorialStepRepository).existsById(10L);
-        verify(tutorialStepRepository).deleteById(10L);
+        verify(tutorialStepRepository).findById(10L);
+        verify(tutorialStepRepository).delete(tutorialStep);
+        verify(supabaseStorageClient).delete(tutorialStep.getImageUrl());
+    }
+
+    @Test
+    void shouldCallStorageDeleteWithNullWhenDeletedStepHasNoImage() {
+        TutorialStep stepWithoutImage = new TutorialStep();
+        stepWithoutImage.setId(20L);
+        stepWithoutImage.setTutorial(tutorial);
+        stepWithoutImage.setStepNumber(3);
+
+        when(tutorialStepRepository.findById(20L))
+                .thenReturn(Optional.of(stepWithoutImage));
+
+        tutorialStepService.delete(20L);
+
+        verify(tutorialStepRepository).delete(stepWithoutImage);
+        // SupabaseStorageClient.delete() itself no-ops on null; the service
+        // doesn't need its own null-check to get that safety.
+        verify(supabaseStorageClient).delete(null);
     }
 
     @Test
     void shouldThrowExceptionWhenDeletingNonExistingTutorialStep() {
-        when(tutorialStepRepository.existsById(10L))
-                .thenReturn(false);
+        when(tutorialStepRepository.findById(10L))
+                .thenReturn(Optional.empty());
 
         assertThrows(
                 ResourceNotFoundException.class,
                 () -> tutorialStepService.delete(10L)
         );
 
-        verify(tutorialStepRepository).existsById(10L);
+        verify(tutorialStepRepository).findById(10L);
+        verify(tutorialStepRepository, never()).delete(ArgumentMatchers.any());
+        verify(supabaseStorageClient, never()).delete(ArgumentMatchers.any());
     }
 
     @Test
@@ -519,7 +695,6 @@ void shouldThrowWhenReplacingStepsForNonExistingTutorial() {
         verify(tutorialRepository).findById(1L);
     }
 
-    
     @Test
     void shouldReturnTutorialStepWhenCallerIsAdminAndTutorialIsDraft() {
         Tutorial draftTutorial = new Tutorial();
