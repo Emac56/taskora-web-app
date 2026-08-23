@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialRequest;
 import com.taskora.api.features.tutorial.dto.request.UpdateTutorialRequest;
 import com.taskora.api.features.tutorial.dto.response.TutorialResponse;
+import com.taskora.api.features.tutorial.dto.response.TutorialStatsResponse;
 import com.taskora.api.features.tutorial.enums.TutorialStatus;
 import com.taskora.api.features.tutorial.service.TutorialService;
 
