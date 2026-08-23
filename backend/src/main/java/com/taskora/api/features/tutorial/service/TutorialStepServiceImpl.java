@@ -11,10 +11,13 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.taskora.api.common.exception.DuplicateStepNumberException;
 import com.taskora.api.common.exception.ResourceNotFoundException;
 import com.taskora.api.common.security.CurrentUserProvider;
+import com.taskora.api.common.storage.SupabaseStorageClient;
 import com.taskora.api.features.tutorial.dto.request.CreateTutorialStepRequest;
 import com.taskora.api.features.tutorial.dto.request.ReplaceTutorialStepItem;
 import com.taskora.api.features.tutorial.dto.request.ReplaceTutorialStepRequest;
@@ -37,17 +40,20 @@ public class TutorialStepServiceImpl implements TutorialStepService {
     private final TutorialRepository tutorialRepository;
     private final TutorialStepMapper tutorialStepMapper;
     private final CurrentUserProvider currentUserProvider;
+    private final SupabaseStorageClient supabaseStorageClient;
 
     public TutorialStepServiceImpl(
             TutorialStepRepository tutorialStepRepository,
             TutorialRepository tutorialRepository,
             TutorialStepMapper tutorialStepMapper,
-            CurrentUserProvider currentUserProvider) {
+            CurrentUserProvider currentUserProvider,
+            SupabaseStorageClient supabaseStorageClient) {
 
         this.tutorialStepRepository = tutorialStepRepository;
         this.tutorialRepository = tutorialRepository;
         this.tutorialStepMapper = tutorialStepMapper;
         this.currentUserProvider = currentUserProvider;
+        this.supabaseStorageClient = supabaseStorageClient;
     }
 
     @Override
@@ -128,10 +134,22 @@ public class TutorialStepServiceImpl implements TutorialStepService {
                             + " already exists for this tutorial.");
         }
 
+        // Captured before the mapper overwrites it, so we know afterwards
+        // whether the old object in storage needs to be cleaned up.
+        String previousImageUrl = tutorialStep.getImageUrl();
+
         tutorialStepMapper.updateEntity(request, tutorialStep);
 
         TutorialStep updatedTutorialStep =
                 tutorialStepRepository.save(tutorialStep);
+
+        // This method carries no @Transactional of its own, so save()
+        // above already committed by the time we get here — safe to
+        // delete the old object now that the new one is durable.
+        if (previousImageUrl != null
+                && !previousImageUrl.equals(updatedTutorialStep.getImageUrl())) {
+            supabaseStorageClient.delete(previousImageUrl);
+        }
 
         return tutorialStepMapper.toResponse(updatedTutorialStep);
     }
@@ -139,12 +157,16 @@ public class TutorialStepServiceImpl implements TutorialStepService {
     @Override
     public void delete(Long id) {
 
-        if (!tutorialStepRepository.existsById(id)) {
-            throw new ResourceNotFoundException(
-                    TUTORIAL_STEP_NOT_FOUND_MESSAGE);
-        }
+        TutorialStep tutorialStep = tutorialStepRepository.findById(id)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                TUTORIAL_STEP_NOT_FOUND_MESSAGE));
 
-        tutorialStepRepository.deleteById(id);
+        tutorialStepRepository.delete(tutorialStep);
+
+        // The DB row is already gone by this point. delete() is a no-op
+        // for a null imageUrl, so steps without an image are unaffected.
+        supabaseStorageClient.delete(tutorialStep.getImageUrl());
     }
 
     // NEW: atomic bulk replace. Single transaction — create, update, delete,
@@ -195,9 +217,13 @@ public class TutorialStepServiceImpl implements TutorialStepService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
-        List<Long> idsToDelete = existingSteps.stream()
+        // Captured before deleteAllByIdInBatch: once those rows are gone we
+        // can't ask them for their imageUrl anymore.
+        List<TutorialStep> stepsToDelete = existingSteps.stream()
+                .filter(step -> !incomingIds.contains(step.getId()))
+                .toList();
+        List<Long> idsToDelete = stepsToDelete.stream()
                 .map(TutorialStep::getId)
-                .filter(id -> !incomingIds.contains(id))
                 .toList();
 
         if (!idsToDelete.isEmpty()) {
@@ -220,6 +246,10 @@ public class TutorialStepServiceImpl implements TutorialStepService {
         tutorialStepRepository.saveAllAndFlush(kept);
 
         // Phase 2: write real final numbers; create brand-new steps.
+        // Kept steps whose imageUrl is being replaced have their previous
+        // value captured here, before the overwrite below.
+        List<String> replacedImageUrls = new ArrayList<>();
+
         List<TutorialStep> toSave = new ArrayList<>();
         for (ReplaceTutorialStepItem item : incoming) {
             TutorialStep step = item.getId() != null
@@ -228,6 +258,12 @@ public class TutorialStepServiceImpl implements TutorialStepService {
 
             if (item.getId() == null) {
                 step.setTutorial(tutorial);
+            } else {
+                String previousImageUrl = step.getImageUrl();
+                if (previousImageUrl != null
+                        && !previousImageUrl.equals(item.getImageUrl())) {
+                    replacedImageUrls.add(previousImageUrl);
+                }
             }
             step.setStepNumber(item.getStepNumber());
             step.setInstruction(item.getInstruction());
@@ -237,10 +273,51 @@ public class TutorialStepServiceImpl implements TutorialStepService {
 
         List<TutorialStep> saved = tutorialStepRepository.saveAll(toSave);
 
+        List<String> imageUrlsToCleanUp = new ArrayList<>(replacedImageUrls);
+        stepsToDelete.forEach(step -> {
+            if (step.getImageUrl() != null) {
+                imageUrlsToCleanUp.add(step.getImageUrl());
+            }
+        });
+        cleanUpAfterCommit(imageUrlsToCleanUp);
+
         return saved.stream()
                 .sorted(Comparator.comparing(TutorialStep::getStepNumber))
                 .map(tutorialStepMapper::toResponse)
                 .toList();
+    }
+
+    /**
+     * Defers Supabase Storage deletes until this method's surrounding
+     * {@code @Transactional} boundary actually commits.
+     *
+     * <p>replaceAll() runs several more DB statements after the point
+     * where these URLs are known (saveAll, then the response mapping).
+     * Deleting from storage immediately would mean that if anything later
+     * in the same transaction throws and the whole thing rolls back, the
+     * database still references images we already told Supabase to
+     * delete — trading one inconsistency (orphaned files) for a worse one
+     * (broken image links). Running outside an active transaction — not
+     * expected given the {@code @Transactional} above, but kept as a safe
+     * default — just deletes immediately instead of silently dropping
+     * the cleanup.
+     */
+    private void cleanUpAfterCommit(List<String> imageUrls) {
+        if (imageUrls.isEmpty()) {
+            return;
+        }
+
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            imageUrls.forEach(supabaseStorageClient::delete);
+                        }
+                    });
+        } else {
+            imageUrls.forEach(supabaseStorageClient::delete);
+        }
     }
 
     private boolean isDraftHiddenFromCaller(Tutorial tutorial) {
