@@ -35,6 +35,16 @@ import com.taskora.api.common.exception.InvalidFileException;
  *
  * <p>The service role key must never be exposed to the frontend — it
  * grants full bucket write access, which is why upload happens server-side.
+ *
+ * <p><b>Upload vs. delete failure semantics differ on purpose.</b> A failed
+ * upload throws, because the caller has nothing usable without it (no
+ * imageUrl to save). A failed delete only logs, because by the time callers
+ * invoke it the database change it's cleaning up after (a row deleted, an
+ * imageUrl replaced) has already happened — refusing to let the caller's
+ * request succeed just because Supabase hiccuped on cleanup would trade a
+ * cosmetic storage leak for a confusing user-facing error. Worst case on
+ * failure is one leftover object, logged for follow-up — the same class of
+ * leak this method exists to close, just not silent about it.
  */
 @Component
 public class SupabaseStorageClient {
@@ -104,6 +114,66 @@ public class SupabaseStorageClient {
         }
 
         return publicBaseUrl + "/" + objectPath;
+    }
+
+    /**
+     * Deletes the object backing a previously-uploaded image, identified by
+     * the public URL that {@link #upload} returned and callers persisted
+     * (e.g. {@code TutorialStep.imageUrl}).
+     *
+     * <p>This is best-effort cleanup, not a transactional guarantee:
+     * <ul>
+     *   <li>{@code null}/blank input is treated as "nothing to clean up"
+     *       and silently ignored — most steps have no image at all, so
+     *       callers can pass {@code step.getImageUrl()} straight through
+     *       without a null check of their own.</li>
+     *   <li>A URL that doesn't belong to this bucket (wrong host, wrong
+     *       bucket segment — e.g. stale data from a previous
+     *       configuration) is logged and skipped rather than treated as
+     *       an error, since there is no corresponding object here to
+     *       delete.</li>
+     *   <li>A failed HTTP call (network issue, Supabase-side error) is
+     *       logged and swallowed rather than thrown. See the class-level
+     *       note on why upload and delete deliberately fail differently.</li>
+     * </ul>
+     */
+    public void delete(String imageUrl) {
+        if (imageUrl == null || imageUrl.isBlank()) {
+            return;
+        }
+
+        String objectPath = extractObjectPath(imageUrl);
+        if (objectPath == null) {
+            log.warn(
+                    "Skipping storage cleanup: '{}' is not an object URL for this bucket.",
+                    imageUrl);
+            return;
+        }
+
+        try {
+            restClient.delete()
+                    .uri("/" + objectPath)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientException exception) {
+            log.error(
+                    "Supabase delete failed for object '{}'; it may remain orphaned in storage.",
+                    objectPath, exception);
+        }
+    }
+
+    /**
+     * Reverses the URL construction in {@link #upload}: turns a stored
+     * public URL back into the bucket-relative object path Supabase's
+     * object API expects. Returns {@code null} if the URL doesn't start
+     * with this bucket's public prefix at all.
+     */
+    private String extractObjectPath(String imageUrl) {
+        String prefix = publicBaseUrl + "/";
+        if (!imageUrl.startsWith(prefix)) {
+            return null;
+        }
+        return imageUrl.substring(prefix.length());
     }
 
     /**

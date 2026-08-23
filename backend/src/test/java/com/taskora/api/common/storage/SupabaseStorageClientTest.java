@@ -1,5 +1,6 @@
 package com.taskora.api.common.storage;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -20,7 +21,7 @@ import org.springframework.web.client.RestClient;
 import com.taskora.api.common.exception.ImageUploadException;
 import com.taskora.api.common.exception.InvalidFileException;
 
-class SupabaseStorageClientTest {
+public class SupabaseStorageClientTest {
 
     private static final String SUPABASE_URL = "https://test.supabase.co";
     private static final String SERVICE_ROLE_KEY = "test-service-role-key";
@@ -39,6 +40,12 @@ class SupabaseStorageClientTest {
     private static final byte[] WEBP_BYTES = {
             'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'E', 'B', 'P'
     };
+
+    // Object path used across the delete() tests below — arbitrary, but
+    // must round-trip through the same public-URL shape upload() produces.
+    private static final String SAMPLE_OBJECT_PATH = "abc123.png";
+    private static final String SAMPLE_PUBLIC_URL =
+            SUPABASE_URL + "/storage/v1/object/public/" + BUCKET + "/" + SAMPLE_OBJECT_PATH;
 
     private SupabaseStorageClient client;
     private MockRestServiceServer mockServer;
@@ -187,6 +194,55 @@ class SupabaseStorageClientTest {
                 .andRespond(withServerError());
 
         assertThrows(ImageUploadException.class, () -> client.upload(file));
+        mockServer.verify();
+    }
+
+    // ---------- NEW: delete() — orphaned storage file cleanup ----------
+
+    @Test
+    void deleteShouldSendDeleteRequestForObjectBelongingToThisBucket() {
+        mockServer.expect(requestTo(
+                        SUPABASE_URL + "/storage/v1/object/" + BUCKET + "/" + SAMPLE_OBJECT_PATH))
+                .andExpect(method(HttpMethod.DELETE))
+                .andExpect(header("apikey", SERVICE_ROLE_KEY))
+                .andExpect(header("Authorization", "Bearer " + SERVICE_ROLE_KEY))
+                .andRespond(withSuccess());
+
+        client.delete(SAMPLE_PUBLIC_URL);
+
+        mockServer.verify();
+    }
+
+    @Test
+    void deleteShouldBeNoOpWhenImageUrlIsNull() {
+        // No mockServer expectations registered — if the implementation
+        // attempted an HTTP call anyway, MockRestServiceServer would throw
+        // on the unexpected request and fail this test.
+        assertDoesNotThrow(() -> client.delete(null));
+    }
+
+    @Test
+    void deleteShouldBeNoOpWhenImageUrlIsBlank() {
+        assertDoesNotThrow(() -> client.delete("   "));
+    }
+
+    @Test
+    void deleteShouldBeNoOpWhenUrlDoesNotBelongToThisBucket() {
+        assertDoesNotThrow(() ->
+                client.delete("https://other-host.example.com/some/unrelated/file.png"));
+    }
+
+    @Test
+    void deleteShouldNotThrowWhenSupabaseReturnsError() {
+        mockServer.expect(requestTo(
+                        SUPABASE_URL + "/storage/v1/object/" + BUCKET + "/" + SAMPLE_OBJECT_PATH))
+                .andExpect(method(HttpMethod.DELETE))
+                .andRespond(withServerError());
+
+        // Cleanup is best-effort: a storage-side failure here must never
+        // bubble up and fail the caller's own delete/update request.
+        assertDoesNotThrow(() -> client.delete(SAMPLE_PUBLIC_URL));
+
         mockServer.verify();
     }
 }
