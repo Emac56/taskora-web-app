@@ -47,6 +47,9 @@ class TutorialStepServiceImplTest {
     private TutorialRepository tutorialRepository;
 
     @Mock
+private TutorialStepRepository tutorialStepRepository;
+    
+    @Mock
     private TutorialStepMapper tutorialStepMapper;
 
     @Mock
@@ -792,4 +795,19 @@ class TutorialStepServiceImplTest {
 
         verify(currentUserProvider).isAdmin();
     }
+
+    @Test
+void shouldReturnAggregateStats() {
+    when(tutorialRepository.count()).thenReturn(5L);
+    when(tutorialRepository.countByStatus(TutorialStatus.PUBLISHED)).thenReturn(3L);
+    when(tutorialRepository.countByStatus(TutorialStatus.DRAFT)).thenReturn(2L);
+    when(tutorialStepRepository.count()).thenReturn(17L);
+
+    TutorialStatsResponse result = tutorialService.getStats();
+
+    assertEquals(5L, result.getTotalTutorials());
+    assertEquals(3L, result.getPublishedCount());
+    assertEquals(2L, result.getDraftCount());
+    assertEquals(17L, result.getTotalSteps());
+                                            }
 }
