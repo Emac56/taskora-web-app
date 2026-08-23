@@ -10,6 +10,11 @@ export function getTutorialById(id) {
   return http.get(`/tutorials/${id}`).then((res) => res.data)
 }
 
+// GET /api/v1/tutorials/stats (ADMIN) -> { totalTutorials, publishedCount, draftCount, totalSteps }
+export function getTutorialStats() {
+  return http.get('/tutorials/stats').then((res) => res.data)
+}
+
 // POST /api/v1/tutorials (ADMIN) -> body: { title, description, status }
 export function createTutorial(payload) {
   return http.post('/tutorials', payload).then((res) => res.data)
